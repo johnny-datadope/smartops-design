@@ -81,8 +81,6 @@ function TopBar({ onLogout, route, setRoute, theme, setTheme, currentUser }) {
         </div>
       </div>
       <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-        <IconBtn icon={<IconHeadset size={14}/>} label="Open support ticket" />
-
         {/* User menu */}
         <div style={{ position:'relative' }}>
           <button
@@ -177,6 +175,15 @@ function TopBar({ onLogout, route, setRoute, theme, setTheme, currentUser }) {
                   <span style={{ fontSize:11, color:'var(--fg-3)' }}>{isLight ? 'Light' : 'Dark'}</span>
                 </button>
                 <div style={{ height:1, background:'var(--line)', margin:'4px 6px' }}/>
+                <button
+                  onClick={() => { setUserOpen(false); }}
+                  style={userMenuItem}
+                  onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-hover)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                >
+                  <IconHeadset size={14}/>
+                  <span style={{ flex:1, textAlign:'left' }}>Open support ticket</span>
+                </button>
                 <button
                   onClick={() => { setUserOpen(false); onLogout && onLogout(); }}
                   style={userMenuItem}
