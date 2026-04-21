@@ -1,12 +1,4 @@
-// App shell: login → dashboard; global state for investigation panel + tweaks.
-const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
-  "accentHue": 200,
-  "density": "comfortable",
-  "rowStyle": "flat",
-  "statsStyle": "numbers",
-  "labelStyle": "chip"
-}/*EDITMODE-END*/;
-
+// App shell: login → dashboard; global state for investigation panel.
 function App() {
   const [user, setUser] = React.useState(() => {
     const raw = localStorage.getItem('smartops.user');
@@ -24,29 +16,7 @@ function App() {
       : theme;
     document.documentElement.setAttribute('data-theme', resolved);
   }, [theme]);
-  const [tweaksOpen, setTweaksOpen] = React.useState(false);
-  const [tweaks, setTweaks] = React.useState(TWEAK_DEFAULTS);
   const [, setTick] = React.useState(0);
-
-  // Apply accent hue live
-  React.useEffect(() => {
-    const root = document.documentElement;
-    root.style.setProperty('--accent',      `oklch(0.80 0.12 ${tweaks.accentHue})`);
-    root.style.setProperty('--accent-2',    `oklch(0.70 0.14 ${tweaks.accentHue})`);
-    root.style.setProperty('--accent-glow', `oklch(0.80 0.12 ${tweaks.accentHue} / 0.18)`);
-  }, [tweaks.accentHue]);
-
-  // Tweaks host protocol
-  React.useEffect(() => {
-    const handler = (e) => {
-      if (!e.data || typeof e.data !== 'object') return;
-      if (e.data.type === '__activate_edit_mode') setTweaksOpen(true);
-      if (e.data.type === '__deactivate_edit_mode') setTweaksOpen(false);
-    };
-    window.addEventListener('message', handler);
-    window.parent.postMessage({ type:'__edit_mode_available' }, '*');
-    return () => window.removeEventListener('message', handler);
-  }, []);
 
   const handleLogin = (info) => {
     const obj = typeof info === 'string' ? { method: info, role: 'Admin' } : info;
@@ -59,27 +29,17 @@ function App() {
     setUser(null);
   };
 
-  if (!user) return (
-    <>
-      <Login onLogin={handleLogin}/>
-      <TweaksPanel open={tweaksOpen} tweaks={tweaks} setTweaks={setTweaks} onClose={() => setTweaksOpen(false)}/>
-    </>
-  );
+  if (!user) return <Login onLogin={handleLogin}/>;
 
   return (
-    <div data-screen-label={route==='settings' ? '02 Settings' : '01 Events Dashboard'} style={{ minHeight:'100vh' }}>
+    <div data-screen-label="01 Events Dashboard" style={{ minHeight:'100vh' }}>
       <TopBar onLogout={handleLogout} route={route} setRoute={setRoute} theme={theme} setTheme={setTheme} currentUser={user}/>
-      {route === 'events' ? (
-        <EventsPage
-          onOpenDetail={setDetailId}
-          density={tweaks.density}
-        />
-      ) : route === 'users' ? (
+      {route === 'users' ? (
         <UsersPage/>
-      ) : route === 'admin' ? (
-        user?.role === 'Admin' ? <AdministrationPage tweaks={tweaks} setTweaks={setTweaks} theme={theme} setTheme={setTheme}/> : <EventsPage onOpenDetail={setDetailId} density={tweaks.density}/>
+      ) : route === 'admin' && user?.role === 'Admin' ? (
+        <AdministrationPage theme={theme} setTheme={setTheme}/>
       ) : (
-        <SettingsPage tweaks={tweaks} setTweaks={setTweaks} theme={theme} setTheme={setTheme}/>
+        <EventsPage onOpenDetail={setDetailId}/>
       )}
       <EventDetail
         event={detailId != null ? EVENTS[detailId] : null}
@@ -111,7 +71,6 @@ function App() {
           setTick(t => t + 1);
         }}
       />
-      <TweaksPanel open={tweaksOpen} tweaks={tweaks} setTweaks={setTweaks} onClose={() => setTweaksOpen(false)}/>
     </div>
   );
 }

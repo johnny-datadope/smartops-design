@@ -124,16 +124,6 @@ function TopBar({ onLogout, route, setRoute, theme, setTheme, currentUser }) {
                   <div style={{ fontSize:10.5, color:'var(--fg-4)', marginTop:2, letterSpacing:'0.06em', textTransform:'uppercase' }} className="mono">{me.role}</div>
                 </div>
                 <button
-                  onClick={() => { setUserOpen(false); setRoute('settings'); }}
-                  style={userMenuItem}
-                  onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-hover)'}
-                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                >
-                  <IconSettings size={14}/>
-                  <span style={{ flex:1, textAlign:'left' }}>Settings</span>
-                </button>
-                <div style={{ height:1, background:'var(--line)', margin:'4px 6px' }}/>
-                <button
                   onClick={() => setLangOpen(o => !o)}
                   style={userMenuItem}
                   onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-hover)'}

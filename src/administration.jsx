@@ -1,5 +1,5 @@
 // Administration shell — left-rail with sections. For now only Manage Users.
-function AdministrationPage({ tweaks, setTweaks, theme, setTheme }) {
+function AdministrationPage({ theme, setTheme }) {
   const [section, setSection] = React.useState(() => localStorage.getItem('smartops.admin.section') || 'users');
   React.useEffect(() => { localStorage.setItem('smartops.admin.section', section); }, [section]);
 

@@ -458,7 +458,7 @@ const menuItem = {
   cursor:'pointer', textAlign:'left',
 };
 
-function EventsPage({ onOpenDetail, density }) {
+function EventsPage({ onOpenDetail }) {
   const [filter, setFilter] = React.useState('all');
   const [query, setQuery] = React.useState('');
   const [showArchived, setShowArchived] = React.useState(false);
