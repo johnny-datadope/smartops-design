@@ -1,5 +1,5 @@
 // Administration shell — left-rail with sections. Section driven by the URL.
-function AdministrationPage({ theme, setTheme, section, setSection }) {
+function AdministrationPage({ theme, setTheme, section, setSection, currentUser }) {
   const items = [
     { key:'users', label:'Manage Users', icon:(
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
@@ -54,7 +54,7 @@ function AdministrationPage({ theme, setTheme, section, setSection }) {
         })}
       </aside>
       <main style={{ minWidth:0 }}>
-        {section === 'users' && <UsersPage/>}
+        {section === 'users' && <UsersPage currentUser={currentUser}/>}
         {section === 'roles' && <AdminPlaceholder title="Roles & Permissions" sub="Define custom roles and fine-grained access for your team."/>}
         {section === 'audit' && <AdminPlaceholder title="Audit Log" sub="Trace every admin action — who changed what and when."/>}
       </main>

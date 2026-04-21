@@ -119,9 +119,9 @@ function App() {
     <div data-screen-label="01 Events Dashboard" style={{ minHeight:'100vh' }}>
       <TopBar onLogout={handleLogout} route={route} setRoute={setRoute} theme={theme} setTheme={setTheme} currentUser={user}/>
       {route === 'users' ? (
-        <UsersPage/>
+        <UsersPage currentUser={user}/>
       ) : route === 'admin' && user?.role === 'Admin' ? (
-        <AdministrationPage theme={theme} setTheme={setTheme} section={section} setSection={setAdminSection}/>
+        <AdministrationPage theme={theme} setTheme={setTheme} section={section} setSection={setAdminSection} currentUser={user}/>
       ) : (
         <EventsPage onOpenDetail={setDetailId}/>
       )}

@@ -1,21 +1,27 @@
 // Manage Users — create / edit / disable users. Admin-facing CRUD.
 const USERS_SEED = [
-  { id:1, name:'Daniel Dorado',     email:'daniel.dorado@datadope.io',   role:'Admin', status:'active',  lastSeen:'2m ago',   source:'Google',    initials:'DD' },
-  { id:2, name:'Francisca Molina',  email:'francisca.molina@datadope.io',role:'SRE',   status:'active',  lastSeen:'11m ago',  source:'Google',    initials:'FM' },
-  { id:3, name:'Marelys Rodríguez', email:'marelys.r@datadope.io',       role:'SRE',   status:'active',  lastSeen:'1h ago',   source:'Smart Ops', initials:'MR' },
-  { id:4, name:'Jonathan Fernández',email:'jonathan.f@datadope.io',      role:'Admin', status:'active',  lastSeen:'just now', source:'Google',    initials:'JF' },
-  { id:5, name:'Ana Pereira',       email:'ana.pereira@datadope.io',     role:'SRE',   status:'active',  lastSeen:'3h ago',    source:'Smart Ops', initials:'AP' },
-  { id:6, name:'Mateo Silva',       email:'mateo.silva@datadope.io',     role:'SRE',   status:'disabled',lastSeen:'14d ago',  source:'Smart Ops', initials:'MS' },
+  { id:1, username:'ddorado',   name:'Daniel Dorado',     email:'daniel.dorado@datadope.io',   role:'Admin', language:'en', status:'active',  lastSeen:'2m ago',   source:'Google',    initials:'DD' },
+  { id:2, username:'fmolina',   name:'Francisca Molina',  email:'francisca.molina@datadope.io',role:'SRE',   language:'es', status:'active',  lastSeen:'11m ago',  source:'Google',    initials:'FM' },
+  { id:3, username:'mrodriguez',name:'Marelys Rodríguez', email:'marelys.r@datadope.io',       role:'SRE',   language:'es', status:'active',  lastSeen:'1h ago',   source:'Smart Ops', initials:'MR' },
+  { id:4, username:'jfernandez',name:'Jonathan Fernández',email:'jonathan.f@datadope.io',      role:'Admin', language:'es', status:'active',  lastSeen:'just now', source:'Google',    initials:'JF' },
+  { id:5, username:'apereira',  name:'Ana Pereira',       email:'ana.pereira@datadope.io',     role:'SRE',   language:'en', status:'active',  lastSeen:'3h ago',    source:'Smart Ops', initials:'AP' },
+  { id:6, username:'msilva',    name:'Mateo Silva',       email:'mateo.silva@datadope.io',     role:'SRE',   language:'en', status:'disabled',lastSeen:'14d ago',  source:'Smart Ops', initials:'MS' },
 ];
 window.USERS_SEED = USERS_SEED;
 
 const ROLES = ['Admin','SRE'];
+const LANGUAGES = [
+  { code:'en', label:'English' },
+  { code:'es', label:'Español' },
+];
 
-function UsersPage() {
+function UsersPage({ currentUser }) {
+  const isAdmin = currentUser?.role === 'Admin';
   const [users, setUsers] = React.useState(USERS_SEED);
   const [statFilter, setStatFilter] = React.useState('all'); // all | admins | active | disabled
   const [editing, setEditing] = React.useState(null);   // user object or 'new'
   const [confirmDelete, setConfirmDelete] = React.useState(null);
+  const [toast, setToast] = React.useState(null);
 
   const filtered = users.filter(u => {
     if (statFilter === 'admins' && u.role !== 'Admin') return false;
@@ -24,10 +30,17 @@ function UsersPage() {
     return true;
   });
 
+  const showToast = (msg) => {
+    setToast(msg);
+    setTimeout(() => setToast(t => t === msg ? null : t), 3200);
+  };
+
   const saveUser = (u) => {
-    if (u.id) setUsers(us => us.map(x => x.id === u.id ? { ...x, ...u } : x));
+    const creating = !u.id;
+    if (!creating) setUsers(us => us.map(x => x.id === u.id ? { ...x, ...u } : x));
     else setUsers(us => [{ ...u, id: Date.now(), status: u.status || 'active', lastSeen:'—', source: u.source || 'Smart Ops', initials: initialsOf(u.name) }, ...us]);
     setEditing(null);
+    showToast(creating ? `User "${u.name}" created` : `User "${u.name}" updated`);
   };
   const deleteUser = (id) => { setUsers(us => us.filter(x => x.id !== id)); setConfirmDelete(null); };
 
@@ -39,14 +52,16 @@ function UsersPage() {
           <h1 style={{ fontSize:26, fontWeight:600, letterSpacing:'-0.02em', margin:0 }}>Manage Users</h1>
           <div style={{ fontSize:12.5, color:'var(--fg-3)', marginTop:4 }}>Create, edit, and control access for your team</div>
         </div>
-        <button onClick={() => setEditing('new')} style={{
-          padding:'8px 14px', borderRadius:8,
-          background:'var(--accent)', border:'1px solid var(--accent-2)',
-          color:'#fff', fontSize:12.5, fontWeight:600,
-          display:'inline-flex', alignItems:'center', gap:6,
-        }}>
-          <IconPlus size={14}/> Create user
-        </button>
+        {isAdmin && (
+          <button onClick={() => setEditing('new')} style={{
+            padding:'8px 14px', borderRadius:8,
+            background:'var(--accent)', border:'1px solid var(--accent-2)',
+            color:'#fff', fontSize:12.5, fontWeight:600,
+            display:'inline-flex', alignItems:'center', gap:6,
+          }}>
+            <IconPlus size={14}/> Create user
+          </button>
+        )}
       </div>
 
       {/* stats */}
@@ -74,7 +89,7 @@ function UsersPage() {
         <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12.5 }}>
           <thead>
             <tr>
-              <Th>User</Th><Th>Email</Th><Th>Role</Th><Th>Status</Th><Th>Source</Th><Th>Last active</Th><Th></Th>
+              <Th>User</Th><Th>Username</Th><Th>Email</Th><Th>Role</Th><Th>Status</Th><Th>Source</Th><Th>Last active</Th><Th></Th>
             </tr>
           </thead>
           <tbody>
@@ -86,16 +101,19 @@ function UsersPage() {
                     <span style={{ fontWeight:500 }}>{u.name}</span>
                   </div>
                 </td>
+                <td style={{ padding:'10px 12px', color:'var(--fg-2)' }} className="mono">{u.username}</td>
                 <td style={{ padding:'10px 12px', color:'var(--fg-2)' }} className="mono">{u.email}</td>
                 <td style={{ padding:'10px 12px' }}><RolePill role={u.role}/></td>
                 <td style={{ padding:'10px 12px' }}><UserStatusPill status={u.status}/></td>
                 <td style={{ padding:'10px 12px' }}><SourcePill source={u.source}/></td>
                 <td style={{ padding:'10px 12px', color:'var(--fg-3)' }} className="mono">{u.lastSeen}</td>
                 <td style={{ padding:'10px 12px', textAlign:'right' }}>
-                  <div style={{ display:'inline-flex', gap:6 }}>
-                    <button onClick={()=>setEditing(u)} style={rowBtn}>Edit</button>
-                    <button onClick={()=>setConfirmDelete(u)} style={{ ...rowBtn, color:'var(--sev-crit)', borderColor:'color-mix(in oklch, var(--sev-crit) 30%, var(--line))' }}>Remove</button>
-                  </div>
+                  {isAdmin && (
+                    <div style={{ display:'inline-flex', gap:6 }}>
+                      <button onClick={()=>setEditing(u)} style={rowBtn}>Edit</button>
+                      <button onClick={()=>setConfirmDelete(u)} style={{ ...rowBtn, color:'var(--sev-crit)', borderColor:'color-mix(in oklch, var(--sev-crit) 30%, var(--line))' }}>Remove</button>
+                    </div>
+                  )}
                 </td>
               </tr>
             ))}
@@ -106,8 +124,28 @@ function UsersPage() {
         )}
       </div>
 
-      {editing && <UserForm user={editing === 'new' ? null : editing} onClose={()=>setEditing(null)} onSave={saveUser}/>}
+      {editing && <UserForm user={editing === 'new' ? null : editing} existingUsers={users} onClose={()=>setEditing(null)} onSave={saveUser}/>}
       {confirmDelete && <ConfirmRemove user={confirmDelete} onCancel={()=>setConfirmDelete(null)} onConfirm={()=>deleteUser(confirmDelete.id)}/>}
+      {toast && <Toast message={toast}/>}
+    </div>
+  );
+}
+
+function Toast({ message }) {
+  return (
+    <div style={{
+      position:'fixed', bottom:20, right:20, zIndex:60,
+      padding:'11px 16px', borderRadius:10,
+      background:'color-mix(in oklch, var(--sev-ok) 18%, var(--bg-2))',
+      border:'1px solid color-mix(in oklch, var(--sev-ok) 45%, var(--line-2))',
+      color:'var(--fg)',
+      fontSize:12.5, fontWeight:500,
+      display:'flex', alignItems:'center', gap:9,
+      boxShadow:'0 20px 40px -14px rgba(0,0,0,0.5)',
+      animation:'fadeUp .22s ease',
+    }}>
+      <IconCheck size={14} style={{ color:'var(--sev-ok)' }}/>
+      {message}
     </div>
   );
 }
@@ -182,35 +220,91 @@ function UserStatusPill({ status }) {
   );
 }
 
-function UserForm({ user, onClose, onSave }) {
+function UserForm({ user, existingUsers = [], onClose, onSave }) {
+  const [username, setUsername] = React.useState(user?.username || '');
   const [name, setName] = React.useState(user?.name || '');
   const [email, setEmail] = React.useState(user?.email || '');
   const [role, setRole] = React.useState(user?.role || 'SRE');
+  const [language, setLanguage] = React.useState(user?.language || 'en');
   const [password, setPassword] = React.useState('');
   const [status, setStatus] = React.useState(user?.status || 'active');
   const [source, setSource] = React.useState(user?.source || 'Smart Ops');
+  const [touched, setTouched] = React.useState({});
+  const [submitAttempted, setSubmitAttempted] = React.useState(false);
 
   const isEditing = !!user;
   const isGoogle = source === 'Google';
-  const sourceLocked = isEditing;         // source can never change on edit
+  const sourceLocked = isEditing;
   const emailLocked = isEditing && isGoogle;
   const passwordLocked = isEditing && isGoogle;
 
-  const canSave = name.trim() && /\S+@\S+/.test(email);
+  const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const usernameRe = /^[a-z][a-z0-9._-]{2,31}$/;
+  const otherUsers = existingUsers.filter(u => u.id !== user?.id);
+  const errors = {};
+  const uname = username.trim();
+  if (!uname) errors.username = 'Username is required.';
+  else if (uname.length < 3) errors.username = 'Username must be at least 3 characters.';
+  else if (uname.length > 32) errors.username = 'Username must be at most 32 characters.';
+  else if (!/^[a-z]/.test(uname)) errors.username = 'Username must start with a lowercase letter.';
+  else if (!usernameRe.test(uname)) errors.username = 'Use lowercase letters, digits, dot, underscore, or hyphen.';
+  else if (/[._-]{2,}/.test(uname)) errors.username = 'No consecutive dots, underscores, or hyphens.';
+  else if (/[._-]$/.test(uname)) errors.username = 'Username cannot end with a separator.';
+  else if (otherUsers.some(u => u.username?.toLowerCase() === uname.toLowerCase())) errors.username = 'This username is already in use.';
+  if (!name.trim()) errors.name = 'Full name is required.';
+  if (!email.trim()) errors.email = 'Email is required.';
+  else if (!emailRe.test(email.trim())) errors.email = 'Enter a valid email address.';
+  else if (otherUsers.some(u => u.email.toLowerCase() === email.trim().toLowerCase())) errors.email = 'This email is already in use.';
+  if (!language) errors.language = 'Language is required.';
+  if (!role) errors.role = 'Role is required.';
+
+  const showErr = (field) => (touched[field] || submitAttempted) && errors[field];
+  const markTouched = (field) => setTouched(t => ({ ...t, [field]: true }));
+  const canSave = Object.keys(errors).length === 0;
+
+  const submit = () => {
+    setSubmitAttempted(true);
+    if (!canSave) return;
+    onSave({
+      id: user?.id,
+      username: username.trim(),
+      name: name.trim(),
+      email: email.trim(),
+      role,
+      language,
+      status,
+      source,
+    });
+  };
 
   return (
     <Modal onClose={onClose} title={user ? 'Edit user' : 'Create user'} sub={user ? `Update details for ${user.name}` : 'Set up a new account and role'}>
-      <FormField label="Full name">
-        <input value={name} onChange={e=>setName(e.target.value)} style={formInput}/>
+      <FormField label="Username" required error={showErr('username')}>
+        <input value={username} onChange={e=>setUsername(e.target.value)} onBlur={()=>markTouched('username')} placeholder="e.g. asmith" style={inputStyle(showErr('username'))} autoFocus={!isEditing}/>
       </FormField>
-      <FormField label="Email">
-        <input value={email} onChange={e=>setEmail(e.target.value)} disabled={emailLocked} placeholder="name@company.com" style={{ ...formInput, ...(emailLocked ? lockedInput : null) }}/>
+      <FormField label="Full name" required error={showErr('name')}>
+        <input value={name} onChange={e=>setName(e.target.value)} onBlur={()=>markTouched('name')} style={inputStyle(showErr('name'))}/>
+      </FormField>
+      <FormField label="Email" required error={showErr('email')}>
+        <input value={email} onChange={e=>setEmail(e.target.value)} onBlur={()=>markTouched('email')} disabled={emailLocked} placeholder="name@company.com" style={{ ...inputStyle(showErr('email')), ...(emailLocked ? lockedInput : null) }}/>
         {emailLocked && <div style={lockedHint}>Managed by Google — email cannot be changed here.</div>}
       </FormField>
-      <FormField label="Role">
+      <FormField label="Language" required error={showErr('language')}>
+        <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+          {LANGUAGES.map(l => (
+            <button key={l.code} onClick={()=>{ setLanguage(l.code); markTouched('language'); }} style={{
+              padding:'7px 12px', borderRadius:7, fontSize:12,
+              background: language===l.code ? 'var(--accent-glow)' : 'var(--bg-3)',
+              border:`1px solid ${language===l.code ? 'var(--accent-2)' : 'var(--line-2)'}`,
+              color: language===l.code ? 'var(--accent)' : 'var(--fg-2)',
+            }}>{l.label}</button>
+          ))}
+        </div>
+      </FormField>
+      <FormField label="Role" required error={showErr('role')}>
         <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
           {ROLES.map(r => (
-            <button key={r} onClick={()=>setRole(r)} style={{
+            <button key={r} onClick={()=>{ setRole(r); markTouched('role'); }} style={{
               padding:'7px 12px', borderRadius:7, fontSize:12,
               background: role===r ? 'var(--accent-glow)' : 'var(--bg-3)',
               border:`1px solid ${role===r ? 'var(--accent-2)' : 'var(--line-2)'}`,
@@ -220,7 +314,7 @@ function UserForm({ user, onClose, onSave }) {
         </div>
       </FormField>
       {!passwordLocked && (
-        <FormField label={user ? 'New password (leave blank to keep)' : 'Temporary password'}>
+        <FormField label={user ? 'New password (leave blank to keep)' : 'Password'}>
           <input type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="••••••••" style={formInput}/>
         </FormField>
       )}
@@ -231,52 +325,46 @@ function UserForm({ user, onClose, onSave }) {
           </div>
         </FormField>
       )}
-      {user && (
-        <FormField label="Status">
-          <div style={{ display:'flex', gap:6 }}>
-            {['active','disabled'].map(s => (
-              <button key={s} onClick={()=>setStatus(s)} style={{
-                padding:'6px 11px', borderRadius:7, fontSize:11.5, textTransform:'capitalize',
-                background: status===s ? 'var(--bg-3)' : 'transparent',
-                border:`1px solid ${status===s ? 'var(--line-2)' : 'var(--line)'}`,
-                color: status===s ? 'var(--fg)' : 'var(--fg-2)',
-              }}>{s}</button>
-            ))}
+      <FormField label="Active">
+        <div style={{ display:'flex', gap:6 }}>
+          {['active','disabled'].map(s => (
+            <button key={s} onClick={()=>setStatus(s)} style={{
+              padding:'6px 11px', borderRadius:7, fontSize:11.5, textTransform:'capitalize',
+              background: status===s ? 'var(--bg-3)' : 'transparent',
+              border:`1px solid ${status===s ? 'var(--line-2)' : 'var(--line)'}`,
+              color: status===s ? 'var(--fg)' : 'var(--fg-2)',
+            }}>{s === 'active' ? 'True' : 'False'}</button>
+          ))}
+        </div>
+      </FormField>
+      {isEditing && (
+        <FormField label="Source">
+          <div style={{ ...formInput, ...lockedInput, display:'flex', alignItems:'center' }}>
+            <span style={{ color:'var(--fg-3)', fontSize:12 }}>{source}</span>
           </div>
+          <div style={lockedHint}>Source cannot be changed after creation.</div>
         </FormField>
       )}
-      <FormField label="Source">
-        <div style={{ display:'flex', gap:6 }}>
-          {['Google','Smart Ops'].map(s => {
-            const active = source===s;
-            const disabled = sourceLocked;
-            return (
-              <button key={s} disabled={disabled} onClick={()=> !disabled && setSource(s)} style={{
-                padding:'7px 12px', borderRadius:7, fontSize:12,
-                background: active ? 'var(--accent-glow)' : 'var(--bg-3)',
-                border:`1px solid ${active ? 'var(--accent-2)' : 'var(--line-2)'}`,
-                color: active ? 'var(--accent)' : 'var(--fg-2)',
-                opacity: disabled && !active ? 0.5 : 1,
-                cursor: disabled ? 'not-allowed' : 'pointer',
-              }}>{s}</button>
-            );
-          })}
-        </div>
-        {sourceLocked && <div style={lockedHint}>Source cannot be changed after creation.</div>}
-      </FormField>
 
       <div style={{ display:'flex', justifyContent:'flex-end', gap:8, marginTop:6, paddingTop:14, borderTop:'1px solid var(--line)' }}>
         <button onClick={onClose} style={{ padding:'8px 14px', borderRadius:8, background:'var(--bg-3)', border:'1px solid var(--line-2)', color:'var(--fg-2)', fontSize:12.5 }}>Cancel</button>
-        <button disabled={!canSave} onClick={()=>onSave({ id:user?.id, name, email, role, status, source })} style={{
+        <button onClick={submit} style={{
           padding:'8px 16px', borderRadius:8,
-          background: canSave ? 'var(--accent)' : 'var(--bg-3)',
-          border:`1px solid ${canSave ? 'var(--accent-2)' : 'var(--line)'}`,
-          color: canSave ? '#fff' : 'var(--fg-4)',
-          fontSize:12.5, fontWeight:600, cursor: canSave ? 'pointer' : 'not-allowed',
+          background:'var(--accent)',
+          border:'1px solid var(--accent-2)',
+          color:'#fff',
+          fontSize:12.5, fontWeight:600, cursor:'pointer',
         }}>{user ? 'Save changes' : 'Create user'}</button>
       </div>
     </Modal>
   );
+}
+
+function inputStyle(hasError) {
+  return {
+    ...formInput,
+    borderColor: hasError ? 'var(--sev-crit)' : 'var(--line-2)',
+  };
 }
 
 function ConfirmRemove({ user, onCancel, onConfirm }) {
@@ -317,11 +405,18 @@ function Modal({ title, sub, children, onClose, width = 520 }) {
   );
 }
 
-function FormField({ label, children }) {
+function FormField({ label, required, error, children }) {
   return (
     <div style={{ marginBottom:12 }}>
-      <div style={{ fontSize:11.5, fontWeight:500, color:'var(--fg-2)', marginBottom:5 }}>{label}</div>
+      <div style={{ fontSize:11.5, fontWeight:500, color:'var(--fg-2)', marginBottom:5 }}>
+        {label}{required && <span style={{ color:'var(--sev-crit)', marginLeft:3 }}>*</span>}
+      </div>
       {children}
+      {error && (
+        <div style={{ fontSize:11, color:'var(--sev-crit)', marginTop:5, display:'flex', alignItems:'center', gap:5 }}>
+          <span aria-hidden="true">⚠</span>{error}
+        </div>
+      )}
     </div>
   );
 }
