@@ -400,11 +400,52 @@ const menuItem = {
   cursor:'pointer', textAlign:'left',
 };
 
-function EventsPage({ onOpenDetail }) {
+const ADV_FILTERS_INITIAL = {
+  statuses: [],       // e.g. ['open','closed']
+  caseStatuses: [],   // ['awaiting','processing']
+  caseId: '',
+  severities: [],
+  scopes: [],
+  unassigned: false,
+  mine: false,
+  users: [],          // assignee initials
+  from: '',           // YYYY-MM-DD
+  to: '',
+};
+
+// Parse "DD/MM/YYYY, HH:MM" → Date
+function parseEventAt(s) {
+  if (!s) return null;
+  const [date, time] = s.split(', ');
+  const [d, m, y] = date.split('/').map(Number);
+  const [hh, mm] = (time || '0:0').split(':').map(Number);
+  return new Date(y, m - 1, d, hh, mm);
+}
+
+function advFilterCount(f) {
+  let n = 0;
+  if (f.statuses.length) n++;
+  if (f.caseStatuses.length) n++;
+  if (f.caseId.trim()) n++;
+  if (f.severities.length) n++;
+  if (f.scopes.length) n++;
+  if (f.unassigned) n++;
+  if (f.mine) n++;
+  if (f.users.length) n++;
+  if (f.from) n++;
+  if (f.to) n++;
+  return n;
+}
+
+function EventsPage({ onOpenDetail, currentUser }) {
   const [filter, setFilter] = React.useState('all');
   const [query, setQuery] = React.useState('');
   const [showArchived, setShowArchived] = React.useState(false);
+  const [advFilters, setAdvFilters] = React.useState(ADV_FILTERS_INITIAL);
+  const [advOpen, setAdvOpen] = React.useState(false);
   const [, setNonce] = React.useState(0);
+
+  const myInitials = (currentUser?.name || '').split(/\s+/).map(s => s[0]).slice(0,2).join('').toUpperCase();
 
   const filtered = EVENTS.filter(e => {
     if (showArchived) {
@@ -416,8 +457,34 @@ function EventsPage({ onOpenDetail }) {
     if (filter === 'cases' && e.case === '—') return false;
     if (filter === 'resolved' && e.caseStatus !== 'processing') return false;
     if (query && !(e.title + e.detail + e.service + e.source).toLowerCase().includes(query.toLowerCase())) return false;
+
+    if (advFilters.statuses.length && !advFilters.statuses.includes(e.status)) return false;
+    if (advFilters.caseStatuses.length && !advFilters.caseStatuses.includes(e.caseStatus)) return false;
+    if (advFilters.caseId.trim()) {
+      const needle = advFilters.caseId.trim().toLowerCase().replace(/^#/, '');
+      const haystack = (e.case || '').toLowerCase().replace(/^#/, '');
+      if (!haystack.includes(needle)) return false;
+    }
+    if (advFilters.severities.length && !advFilters.severities.includes(e.sev)) return false;
+    if (advFilters.scopes.length && !advFilters.scopes.includes(e.scope)) return false;
+
+    const assignees = Array.isArray(e.assignees)
+      ? e.assignees
+      : (e.assignee ? [{ initials: e.assignee }] : []);
+    if (advFilters.unassigned && assignees.length > 0) return false;
+    if (advFilters.mine && !assignees.some(a => a.initials === myInitials)) return false;
+    if (advFilters.users.length && !assignees.some(a => advFilters.users.includes(a.initials))) return false;
+
+    if (advFilters.from || advFilters.to) {
+      const eventAt = parseEventAt(e.at);
+      if (!eventAt) return false;
+      if (advFilters.from && eventAt < new Date(advFilters.from + 'T00:00:00')) return false;
+      if (advFilters.to && eventAt > new Date(advFilters.to + 'T23:59:59')) return false;
+    }
     return true;
   });
+
+  const advCount = advFilterCount(advFilters);
 
   const archivedCount = EVENTS.filter(e => e.archived).length;
 
@@ -501,16 +568,33 @@ function EventsPage({ onOpenDetail }) {
             border: `1px solid ${showArchived ? 'rgba(255,255,255,0.25)' : 'var(--line)'}`,
           }}>{archivedCount}</span>
         </button>
-        <button style={{
-          padding:'9px 12px', borderRadius:8,
-          background:'var(--bg-2)',
-          border:'1px solid var(--line)',
-          color:'var(--fg-2)',
-          display:'inline-flex', alignItems:'center', gap:7,
-          fontSize:12.5, fontWeight:500,
-        }}>
-          <IconFilter size={14}/> Advanced Filters
-        </button>
+        <div style={{ position:'relative' }}>
+          <button
+            onClick={() => setAdvOpen(o => !o)}
+            style={{
+              padding:'9px 12px', borderRadius:8,
+              background: advOpen || advCount ? 'var(--accent)' : 'var(--bg-2)',
+              border: `1px solid ${advOpen || advCount ? 'var(--accent)' : 'var(--line)'}`,
+              color: advOpen || advCount ? '#fff' : 'var(--fg-2)',
+              display:'inline-flex', alignItems:'center', gap:7,
+              fontSize:12.5, fontWeight:500,
+            }}>
+            <IconFilter size={14}/> Advanced Filters
+            <span style={{
+              fontSize:10, padding:'1px 6px', borderRadius:99,
+              background: advOpen || advCount ? 'rgba(255,255,255,0.18)' : 'var(--bg-3)',
+              color: advOpen || advCount ? '#fff' : 'var(--fg-3)',
+              border: `1px solid ${advOpen || advCount ? 'rgba(255,255,255,0.25)' : 'var(--line)'}`,
+            }}>{advCount}</span>
+          </button>
+          {advOpen && (
+            <AdvancedFiltersPopover
+              value={advFilters}
+              onChange={setAdvFilters}
+              onClose={() => setAdvOpen(false)}
+            />
+          )}
+        </div>
       </div>
 
       <EventsTable events={filtered} showArchived={showArchived} onOpenDetail={onOpenDetail}
@@ -524,5 +608,229 @@ function EventsPage({ onOpenDetail }) {
     </div>
   );
 }
+
+function AdvancedFiltersPopover({ value, onChange, onClose }) {
+  const set = (patch) => onChange({ ...value, ...patch });
+  const clearAll = () => onChange(ADV_FILTERS_INITIAL);
+  const hasAny = advFilterCount(value) > 0;
+
+  const allUsers = (window.USERS_SEED || []).filter(u => u.status === 'active');
+  const scopes = Array.from(new Set(EVENTS.map(e => e.scope).filter(Boolean)));
+
+  return (
+    <>
+      <div onClick={onClose} style={{ position:'fixed', inset:0, zIndex:30 }}/>
+      <div style={{
+        position:'absolute', top:'calc(100% + 6px)', right:0, zIndex:31,
+        width:340, maxHeight:'min(640px, calc(100vh - 140px))',
+        background:'var(--bg-2)', border:'1px solid var(--line-2)',
+        borderRadius:12, boxShadow:'0 28px 60px -14px rgba(0,0,0,0.45)',
+        display:'flex', flexDirection:'column', overflow:'hidden',
+      }}>
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'14px 16px 10px', borderBottom:'1px solid var(--line)' }}>
+          <div style={{ fontSize:14, fontWeight:600 }}>Filters</div>
+          <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+            {hasAny && <button onClick={clearAll} style={{ fontSize:11.5, color:'var(--fg-3)' }}>Clear all</button>}
+            <button onClick={onClose} style={{ width:24, height:24, borderRadius:6, border:'1px solid var(--line)', color:'var(--fg-2)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+              <IconClose size={12}/>
+            </button>
+          </div>
+        </div>
+
+        <div style={{ padding:'12px 16px', overflowY:'auto', display:'flex', flexDirection:'column', gap:14 }}>
+          <AdvSection label="Event Status">
+            <MultiSelect
+              placeholder="Select statuses"
+              options={Object.entries(STATUS_META).map(([v,m]) => ({ value:v, label:m.label }))}
+              selected={value.statuses}
+              onChange={(statuses) => set({ statuses })}
+            />
+          </AdvSection>
+
+          <AdvSection label="Case Status">
+            <MultiSelect
+              placeholder="Select case statuses"
+              options={Object.entries(CASE_META).map(([v,m]) => ({ value:v, label:m.label }))}
+              selected={value.caseStatuses}
+              onChange={(caseStatuses) => set({ caseStatuses })}
+            />
+          </AdvSection>
+
+          <AdvSection label="# Case #">
+            <input
+              value={value.caseId}
+              onChange={e => set({ caseId: e.target.value })}
+              placeholder="Enter case ID"
+              style={advInput}
+            />
+          </AdvSection>
+
+          <AdvSection label="Severity">
+            <MultiSelect
+              placeholder="Select severities"
+              options={Object.entries(SEV_META).map(([v,m]) => ({ value:v, label:m.label }))}
+              selected={value.severities}
+              onChange={(severities) => set({ severities })}
+            />
+          </AdvSection>
+
+          <AdvSection label="Project/Customer">
+            <MultiSelect
+              placeholder="Select projects"
+              options={scopes.map(s => ({ value:s, label:s }))}
+              selected={value.scopes}
+              onChange={(scopes) => set({ scopes })}
+            />
+          </AdvSection>
+
+          <AdvSection label="Assignee" icon={<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>}>
+            <label style={advCheckRow}>
+              <input type="checkbox" checked={value.unassigned} onChange={e => set({ unassigned: e.target.checked })}/>
+              <span>Unassigned</span>
+            </label>
+            <label style={advCheckRow}>
+              <input type="checkbox" checked={value.mine} onChange={e => set({ mine: e.target.checked })}/>
+              <span>Assigned to Me</span>
+            </label>
+            <div style={{ marginTop:10, fontSize:11.5, color:'var(--fg-3)' }}>Users</div>
+            <MultiSelect
+              placeholder="Assignee"
+              options={allUsers.map(u => ({ value:u.initials, label:u.name }))}
+              selected={value.users}
+              onChange={(users) => set({ users })}
+            />
+          </AdvSection>
+
+          <AdvSection label="Date Range" icon={<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>}>
+            <div style={{ fontSize:11.5, color:'var(--fg-3)', marginBottom:4 }}>From</div>
+            <input type="date" value={value.from} onChange={e => set({ from: e.target.value })} style={advInput}/>
+            <div style={{ fontSize:11.5, color:'var(--fg-3)', margin:'10px 0 4px' }}>To</div>
+            <input type="date" value={value.to} onChange={e => set({ to: e.target.value })} style={advInput}/>
+          </AdvSection>
+        </div>
+      </div>
+    </>
+  );
+}
+
+function AdvSection({ label, icon, children }) {
+  return (
+    <div>
+      <div style={{ display:'flex', alignItems:'center', gap:6, fontSize:12.5, fontWeight:600, color:'var(--fg)', marginBottom:6 }}>
+        {icon}{label}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function MultiSelect({ placeholder, options, selected, onChange, searchable = true }) {
+  const [open, setOpen] = React.useState(false);
+  const [query, setQuery] = React.useState('');
+  React.useEffect(() => { if (!open) setQuery(''); }, [open]);
+  const label = selected.length === 0
+    ? placeholder
+    : selected.length === 1
+      ? (options.find(o => o.value === selected[0])?.label || selected[0])
+      : `${selected.length} selected`;
+  const toggle = (v) => {
+    onChange(selected.includes(v) ? selected.filter(x => x !== v) : [...selected, v]);
+  };
+  const filtered = query
+    ? options.filter(o => `${o.label} ${o.value}`.toLowerCase().includes(query.toLowerCase()))
+    : options;
+  return (
+    <div style={{ position:'relative' }}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{
+          ...advInput,
+          display:'flex', alignItems:'center', justifyContent:'space-between',
+          color: selected.length ? 'var(--fg)' : 'var(--fg-3)',
+          textAlign:'left',
+        }}>
+        <span style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{label}</span>
+        <IconFilter size={12} style={{ color:'var(--fg-3)', flexShrink:0 }}/>
+      </button>
+      {open && (
+        <>
+          <div onClick={() => setOpen(false)} style={{ position:'fixed', inset:0, zIndex:40 }}/>
+          <div style={{
+            position:'absolute', top:'calc(100% + 4px)', left:0, right:0, zIndex:41,
+            maxHeight:260,
+            background:'var(--bg)', border:'1px solid var(--line-2)',
+            borderRadius:8, boxShadow:'0 20px 40px -8px rgba(0,0,0,0.45)',
+            display:'flex', flexDirection:'column', overflow:'hidden',
+          }}>
+            {searchable && (
+              <div style={{ padding:6, borderBottom:'1px solid var(--line)' }}>
+                <input
+                  autoFocus
+                  value={query}
+                  onChange={e => setQuery(e.target.value)}
+                  placeholder="Search…"
+                  style={{
+                    width:'100%', background:'var(--bg-2)',
+                    border:'1px solid var(--line-2)', borderRadius:6,
+                    padding:'6px 8px', fontSize:12, color:'var(--fg)', outline:'none',
+                  }}
+                />
+              </div>
+            )}
+            <div style={{ overflowY:'auto', padding:4 }}>
+              {filtered.map(o => {
+                const isSel = selected.includes(o.value);
+                return (
+                  <button key={o.value}
+                    onClick={() => toggle(o.value)}
+                    style={{
+                      width:'100%', display:'flex', alignItems:'center', gap:8,
+                      padding:'7px 9px', borderRadius:6,
+                      background: isSel ? 'var(--accent-glow)' : 'transparent',
+                      fontSize:12, color:'var(--fg)', textAlign:'left',
+                    }}>
+                    <div style={{
+                      width:14, height:14, borderRadius:3,
+                      border:`1.5px solid ${isSel ? 'var(--accent)' : 'var(--line-2)'}`,
+                      background: isSel ? 'var(--accent)' : 'transparent',
+                      display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0,
+                    }}>
+                      {isSel && <IconCheck size={9} style={{ color:'#fff' }}/>}
+                    </div>
+                    <span style={{ flex:1 }}>{o.label}</span>
+                  </button>
+                );
+              })}
+              {filtered.length === 0 && (
+                <div style={{ padding:10, fontSize:11.5, color:'var(--fg-3)' }}>
+                  {options.length === 0 ? 'No options.' : 'No matches.'}
+                </div>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+const advInput = {
+  width:'100%',
+  padding:'8px 10px',
+  borderRadius:7,
+  background:'var(--bg)',
+  border:'1px solid var(--line-2)',
+  color:'var(--fg)',
+  fontSize:12.5,
+  outline:'none',
+  fontFamily:'inherit',
+};
+
+const advCheckRow = {
+  display:'flex', alignItems:'center', gap:8,
+  padding:'4px 0',
+  fontSize:12.5, color:'var(--fg)',
+  cursor:'pointer',
+};
 
 Object.assign(window, { EventsPage, StatCard });

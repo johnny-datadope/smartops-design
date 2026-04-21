@@ -123,7 +123,7 @@ function App() {
       ) : route === 'admin' && user?.role === 'Admin' ? (
         <AdministrationPage theme={theme} setTheme={setTheme} section={section} setSection={setAdminSection} currentUser={user}/>
       ) : (
-        <EventsPage onOpenDetail={setDetailId}/>
+        <EventsPage onOpenDetail={setDetailId} currentUser={user}/>
       )}
       <EventDetail
         event={detailId != null ? EVENTS[detailId] : null}
