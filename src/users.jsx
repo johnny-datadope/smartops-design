@@ -13,18 +13,14 @@ const ROLES = ['Admin','SRE'];
 
 function UsersPage() {
   const [users, setUsers] = React.useState(USERS_SEED);
-  const [query, setQuery] = React.useState('');
-  const [roleFilter, setRoleFilter] = React.useState('all');
   const [statFilter, setStatFilter] = React.useState('all'); // all | admins | active | disabled
   const [editing, setEditing] = React.useState(null);   // user object or 'new'
   const [confirmDelete, setConfirmDelete] = React.useState(null);
 
   const filtered = users.filter(u => {
-    if (roleFilter !== 'all' && u.role !== roleFilter) return false;
     if (statFilter === 'admins' && u.role !== 'Admin') return false;
     if (statFilter === 'active' && u.status !== 'active') return false;
     if (statFilter === 'disabled' && u.status !== 'disabled') return false;
-    if (query && !(u.name + u.email).toLowerCase().includes(query.toLowerCase())) return false;
     return true;
   });
 
@@ -71,25 +67,6 @@ function UsersPage() {
           value={users.filter(u=>u.status==='disabled').length}
           accent="var(--fg-3)" icon={<IconClose size={16}/>}
           active={statFilter==='disabled'} onClick={()=>setStatFilter(statFilter==='disabled' ? 'all' : 'disabled')}/>
-      </div>
-
-      {/* toolbar */}
-      <div style={{ display:'flex', gap:10, alignItems:'center', marginBottom:14 }}>
-        <div style={{ flex:1, display:'flex', alignItems:'center', gap:8, padding:'9px 12px', borderRadius:8, background:'var(--bg-2)', border:'1px solid var(--line)' }}>
-          <IconSearch size={14} style={{ color:'var(--fg-3)' }}/>
-          <input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search by name or email…" style={{ flex:1, background:'transparent', border:0, outline:'none', color:'var(--fg)', fontSize:12.5 }}/>
-        </div>
-        <div style={{ display:'flex', gap:4, padding:3, borderRadius:8, background:'var(--bg-2)', border:'1px solid var(--line)' }}>
-          {['all',...ROLES].map(r => (
-            <button key={r} onClick={()=>setRoleFilter(r)} style={{
-              padding:'5px 11px', borderRadius:6, fontSize:12,
-              background: roleFilter===r ? 'var(--bg-3)' : 'transparent',
-              border: roleFilter===r ? '1px solid var(--line-2)' : '1px solid transparent',
-              color: roleFilter===r ? 'var(--fg)' : 'var(--fg-2)',
-              textTransform:'capitalize',
-            }}>{r}</button>
-          ))}
-        </div>
       </div>
 
       {/* table */}

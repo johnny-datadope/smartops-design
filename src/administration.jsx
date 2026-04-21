@@ -1,18 +1,5 @@
-// Administration shell — left-rail with sections. For now only Manage Users.
-function AdministrationPage({ theme, setTheme }) {
-  const [section, setSection] = React.useState(() => localStorage.getItem('smartops.admin.section') || 'users');
-  React.useEffect(() => { localStorage.setItem('smartops.admin.section', section); }, [section]);
-
-  // Allow other components (e.g. user menu) to jump to a section even when
-  // we're already on the admin route.
-  React.useEffect(() => {
-    const handler = (e) => {
-      if (e?.detail?.section) setSection(e.detail.section);
-    };
-    window.addEventListener('smartops:admin-section', handler);
-    return () => window.removeEventListener('smartops:admin-section', handler);
-  }, []);
-
+// Administration shell — left-rail with sections. Section driven by the URL.
+function AdministrationPage({ theme, setTheme, section, setSection }) {
   const items = [
     { key:'users', label:'Manage Users', icon:(
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
