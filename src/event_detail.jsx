@@ -5,7 +5,6 @@ function EventDetail({ event, onClose, onInvestigate, onAssign }) {
   const [comments, setComments] = React.useState([]);
   const [aiInput, setAiInput] = React.useState('');
   const [assignOpen, setAssignOpen] = React.useState(false);
-  const [assignQuery, setAssignQuery] = React.useState('');
   const [feedback, setFeedback] = React.useState(null); // null | 'up' | 'down'
 
   const submitComment = () => {
@@ -312,64 +311,11 @@ function EventDetail({ event, onClose, onInvestigate, onAssign }) {
                       borderRadius:10, boxShadow:'0 20px 40px -8px rgba(0,0,0,0.5)',
                       display:'flex', flexDirection:'column', overflow:'hidden',
                     }}>
-                      <div style={{ padding:'8px 10px', borderBottom:'1px solid var(--line)' }}>
-                        <input
-                          autoFocus
-                          value={assignQuery}
-                          onChange={e => setAssignQuery(e.target.value)}
-                          placeholder="Search users…"
-                          style={{
-                            width:'100%', background:'var(--bg-2)',
-                            border:'1px solid var(--line-2)', borderRadius:6,
-                            padding:'6px 8px', fontSize:12, color:'var(--fg)', outline:'none',
-                          }}
-                        />
-                      </div>
-                      <div style={{ padding:'6px 10px', fontSize:10.5, color:'var(--fg-4)', letterSpacing:'0.12em', textTransform:'uppercase', borderBottom:'1px solid var(--line)' }} className="mono">
-                        {currentAssignees(event).length} selected · click to toggle
-                      </div>
-                      <div style={{ overflowY:'auto', flex:1 }}>
-                        {currentAssignees(event).length > 0 && (
-                          <button
-                            onClick={() => { onAssign && onAssign({ clear:true }); }}
-                            style={assignRow('var(--sev-high)')}
-                          >
-                            <div style={{ width:22, height:22, borderRadius:99, border:'1px dashed var(--line-2)', display:'flex', alignItems:'center', justifyContent:'center', color:'var(--fg-3)', fontSize:12 }}>×</div>
-                            <span style={{ fontSize:12, color:'var(--sev-high)' }}>Clear all</span>
-                          </button>
-                        )}
-                        {(window.USERS_SEED || [])
-                          .filter(u => u.status === 'active')
-                          .filter(u => !assignQuery || (u.name + u.email).toLowerCase().includes(assignQuery.toLowerCase()))
-                          .map(u => {
-                            const isSelected = currentAssignees(event).some(a => a.initials === u.initials);
-                            return (
-                              <button key={u.id}
-                                onClick={() => { onAssign && onAssign({ toggle: u }); }}
-                                style={assignRow(isSelected ? 'var(--accent)' : null)}
-                              >
-                                <div style={{
-                                  width:16, height:16, borderRadius:4,
-                                  border:`1.5px solid ${isSelected ? 'var(--accent)' : 'var(--line-2)'}`,
-                                  background: isSelected ? 'var(--accent)' : 'transparent',
-                                  display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0,
-                                }}>
-                                  {isSelected && <IconCheck size={11} style={{ color:'#fff' }}/>}
-                                </div>
-                                <div style={{
-                                  width:22, height:22, borderRadius:99,
-                                  background:'linear-gradient(135deg, oklch(0.55 0.12 200), oklch(0.45 0.12 260))',
-                                  color:'#fff', fontSize:9.5, fontWeight:600,
-                                  display:'flex', alignItems:'center', justifyContent:'center',
-                                }}>{u.initials}</div>
-                                <div style={{ flex:1, minWidth:0, textAlign:'left' }}>
-                                  <div style={{ fontSize:12, color:'var(--fg)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{u.name}</div>
-                                  <div style={{ fontSize:10.5, color:'var(--fg-4)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{u.role}</div>
-                                </div>
-                              </button>
-                            );
-                          })}
-                      </div>
+                      <AssigneePickerBody
+                        assigned={currentAssignees(event)}
+                        hasCase={event.case && event.case !== '—'}
+                        onToggle={u => onAssign && onAssign({ toggle: u })}
+                      />
                     </div>
                   </>
                 )}
@@ -483,14 +429,6 @@ const codeInline = {
   background:'var(--bg-3)', border:'1px solid var(--line)',
   color:'var(--accent)',
 };
-
-const assignRow = (accentColor) => ({
-  width:'100%', display:'flex', alignItems:'center', gap:10,
-  padding:'8px 10px',
-  background: accentColor && accentColor !== 'var(--sev-high)' ? 'var(--accent-glow)' : 'transparent',
-  border:0, borderBottom:'1px solid var(--line)',
-  cursor:'pointer', textAlign:'left',
-});
 
 function Step({ n, label, meta, active }) {
   return (
