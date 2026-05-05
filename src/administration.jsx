@@ -7,6 +7,21 @@ function AdministrationPage({ theme, setTheme, section, setSection, currentUser 
         <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
       </svg>
     )},
+    { key:'usage', label:'Usage & Costs', icon:(
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+        <line x1="3" y1="20" x2="21" y2="20"/>
+        <line x1="6" y1="20" x2="6" y2="14"/>
+        <line x1="12" y1="20" x2="12" y2="4"/>
+        <line x1="18" y1="20" x2="18" y2="10"/>
+      </svg>
+    )},
+    { key:'usage-v2', label:'Usage & Costs', badge:'v2', icon:(
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M3 3v18h18"/>
+        <path d="M7 14l4-4 3 3 5-6"/>
+        <circle cx="19" cy="7" r="1.5" fill="currentColor"/>
+      </svg>
+    )},
     { key:'roles', label:'Roles & Permissions', icon:(
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
         <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
@@ -49,12 +64,23 @@ function AdministrationPage({ theme, setTheme, section, setSection, currentUser 
             >
               {it.icon}
               <span style={{ flex:1 }}>{it.label}</span>
+              {it.badge && (
+                <span className="mono" style={{
+                  fontSize:9.5, fontWeight:700, letterSpacing:'0.06em',
+                  padding:'1px 6px', borderRadius:99,
+                  background:'var(--accent-glow)',
+                  border:'1px solid var(--accent-2)',
+                  color:'var(--accent)',
+                }}>{it.badge}</span>
+              )}
             </button>
           );
         })}
       </aside>
       <main style={{ minWidth:0 }}>
         {section === 'users' && <UsersPage currentUser={currentUser}/>}
+        {section === 'usage' && <UsageMetricsPage/>}
+        {section === 'usage-v2' && <UsageMetricsV2Page/>}
         {section === 'roles' && <AdminPlaceholder title="Roles & Permissions" sub="Define custom roles and fine-grained access for your team."/>}
         {section === 'audit' && <AdminPlaceholder title="Audit Log" sub="Trace every admin action — who changed what and when."/>}
       </main>

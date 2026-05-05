@@ -6,8 +6,8 @@
 
 // URL slug ↔ internal section key. Slugs are what team members see in Jira links;
 // internal keys are what the admin page renders against.
-const ADMIN_SLUG_TO_SECTION = { 'manage-users':'users', 'roles':'roles', 'audit':'audit' };
-const ADMIN_SECTION_TO_SLUG = { 'users':'manage-users', 'roles':'roles', 'audit':'audit' };
+const ADMIN_SLUG_TO_SECTION = { 'manage-users':'users', 'usage':'usage', 'usage-v2':'usage-v2', 'roles':'roles', 'audit':'audit' };
+const ADMIN_SECTION_TO_SLUG = { 'users':'manage-users', 'usage':'usage', 'usage-v2':'usage-v2', 'roles':'roles', 'audit':'audit' };
 
 function parseHash(hash) {
   const raw = (hash || '').replace(/^#\/?/, '');
