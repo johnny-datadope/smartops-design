@@ -1,13 +1,27 @@
-// Administration shell — left-rail with sections. Section driven by the URL.
-function AdministrationPage({ theme, setTheme, section, setSection, currentUser }) {
+// Administration shell — Apolo-aligned sidebar (Manage Users + Usage only).
+
+function AdministrationPage({ section, setSection, currentUser }) {
+  const { t } = useI18n();
+  const [collapsed, setCollapsed] = React.useState(() =>
+    localStorage.getItem('smartops.admin-collapsed') === '1'
+  );
+
+  const toggleCollapsed = () => {
+    setCollapsed(c => {
+      const next = !c;
+      localStorage.setItem('smartops.admin-collapsed', next ? '1' : '0');
+      return next;
+    });
+  };
+
   const items = [
-    { key:'users', label:'Manage Users', icon:(
+    { key: 'users', label: t.admin.manageUsers, icon: (
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
         <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
         <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
       </svg>
     )},
-    { key:'usage', label:'Usage & Costs', icon:(
+    { key: 'usage', label: t.admin.usage, icon: (
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
         <line x1="3" y1="20" x2="21" y2="20"/>
         <line x1="6" y1="20" x2="6" y2="14"/>
@@ -15,102 +29,60 @@ function AdministrationPage({ theme, setTheme, section, setSection, currentUser 
         <line x1="18" y1="20" x2="18" y2="10"/>
       </svg>
     )},
-    { key:'usage-v2', label:'Usage & Costs', badge:'v2', icon:(
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M3 3v18h18"/>
-        <path d="M7 14l4-4 3 3 5-6"/>
-        <circle cx="19" cy="7" r="1.5" fill="currentColor"/>
-      </svg>
-    )},
-    { key:'roles', label:'Roles & Permissions', icon:(
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-      </svg>
-    )},
-    { key:'audit', label:'Audit Log', icon:(
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8"/><path d="M8 17h8"/>
-      </svg>
-    )},
   ];
 
   return (
-    <div data-screen-label="04 Administration" style={{ display:'grid', gridTemplateColumns:'240px 1fr', minHeight:'calc(100vh - 58px)' }}>
+    <div data-screen-label="04 Administration" style={{ display: 'flex', minHeight: 'calc(100vh - 58px)' }}>
       <aside style={{
-        borderRight:'1px solid var(--line)',
-        padding:'22px 14px',
-        background:'var(--bg-2)',
-        display:'flex', flexDirection:'column', gap:4,
+        width: collapsed ? 56 : 240,
+        flexShrink: 0,
+        borderRight: '1px solid var(--line)',
+        padding: collapsed ? '22px 8px' : '22px 14px',
+        background: 'var(--bg-2)',
+        display: 'flex', flexDirection: 'column', gap: 4,
+        transition: 'width .2s ease',
       }}>
         <div style={{
-          fontSize:10.5, color:'var(--fg-4)', letterSpacing:'0.14em',
-          textTransform:'uppercase', padding:'4px 10px 10px',
-        }} className="mono">Administration</div>
+          display: 'flex', alignItems: 'center', justifyContent: collapsed ? 'center' : 'space-between',
+          padding: collapsed ? '4px 0 10px' : '4px 10px 10px',
+        }}>
+          {!collapsed && (
+            <div style={{
+              fontSize: 10.5, color: 'var(--fg-4)', letterSpacing: '0.14em',
+              textTransform: 'uppercase',
+            }} className="mono">{t.nav.administration}</div>
+          )}
+          <button onClick={toggleCollapsed} title={collapsed ? t.admin.sidebar.expand : t.admin.sidebar.collapse} style={{
+            width: 28, height: 28, borderRadius: 6, border: '1px solid var(--line)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--fg-3)',
+          }}>
+            <IconChevron size={12} style={{ transform: collapsed ? 'rotate(-90deg)' : 'rotate(90deg)' }}/>
+          </button>
+        </div>
         {items.map(it => {
           const active = section === it.key;
           return (
             <button key={it.key}
               onClick={() => setSection(it.key)}
+              title={collapsed ? it.label : undefined}
+              className={'btn btn--ghost btn--sm' + (active ? ' is-active' : '')}
               style={{
-                display:'flex', alignItems:'center', gap:10,
-                padding:'9px 10px', borderRadius:8,
-                background: active ? 'var(--bg-3)' : 'transparent',
-                border: active ? '1px solid var(--line-2)' : '1px solid transparent',
-                color: active ? 'var(--fg)' : 'var(--fg-2)',
-                fontSize:12.5, fontWeight:500, textAlign:'left',
+                display: 'flex', alignItems: 'center', gap: collapsed ? 0 : 10,
+                justifyContent: collapsed ? 'center' : 'flex-start',
+                width: collapsed ? 36 : '100%',
+                padding: collapsed ? '9px 0' : '9px 10px',
               }}
-              onMouseEnter={e => { if (!active) e.currentTarget.style.background = 'var(--bg-hover)'; }}
-              onMouseLeave={e => { if (!active) e.currentTarget.style.background = 'transparent'; }}
             >
               {it.icon}
-              <span style={{ flex:1 }}>{it.label}</span>
-              {it.badge && (
-                <span className="mono" style={{
-                  fontSize:9.5, fontWeight:700, letterSpacing:'0.06em',
-                  padding:'1px 6px', borderRadius:99,
-                  background:'var(--accent-glow)',
-                  border:'1px solid var(--accent-2)',
-                  color:'var(--accent)',
-                }}>{it.badge}</span>
-              )}
+              {!collapsed && <span style={{ flex: 1 }}>{it.label}</span>}
             </button>
           );
         })}
       </aside>
-      <main style={{ minWidth:0 }}>
+      <main className="layout-page" style={{ flex: 1, minWidth: 0, paddingTop: 0, paddingBottom: 0 }}>
         {section === 'users' && <UsersPage currentUser={currentUser}/>}
         {section === 'usage' && <UsageMetricsPage/>}
-        {section === 'usage-v2' && <UsageMetricsV2Page/>}
-        {section === 'roles' && <AdminPlaceholder title="Roles & Permissions" sub="Define custom roles and fine-grained access for your team."/>}
-        {section === 'audit' && <AdminPlaceholder title="Audit Log" sub="Trace every admin action — who changed what and when."/>}
       </main>
-    </div>
-  );
-}
-
-function AdminPlaceholder({ title, sub }) {
-  return (
-    <div style={{ padding:'22px 28px 40px' }}>
-      <div style={{ marginBottom:18 }}>
-        <h1 style={{ fontSize:26, fontWeight:600, letterSpacing:'-0.02em', margin:0 }}>{title}</h1>
-        <div style={{ fontSize:12.5, color:'var(--fg-3)', marginTop:4 }}>{sub}</div>
-      </div>
-      <div style={{
-        padding:'60px 24px', borderRadius:12,
-        background:'var(--bg-2)', border:'1px dashed var(--line-2)',
-        display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
-        gap:10, color:'var(--fg-3)', textAlign:'center',
-      }}>
-        <div style={{
-          width:44, height:44, borderRadius:10,
-          background:'var(--bg-3)', border:'1px solid var(--line-2)',
-          display:'flex', alignItems:'center', justifyContent:'center', color:'var(--fg-3)',
-        }}>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
-        </div>
-        <div style={{ fontSize:13.5, fontWeight:500, color:'var(--fg-2)' }}>Coming soon</div>
-        <div style={{ fontSize:12, maxWidth:360 }}>This section is a placeholder. {sub}</div>
-      </div>
     </div>
   );
 }

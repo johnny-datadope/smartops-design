@@ -1,11 +1,157 @@
 // Event detail modal — opens when a row title is clicked.
+
+const PANEL_RIGHT_PCT_KEY = 'smartops-alert-detail-right-pct';
+const PANEL_RIGHT_DEFAULT = 45;
+const PANEL_RIGHT_MIN = 30;
+const PANEL_RIGHT_MAX = 65;
+
+function loadStoredRightPct() {
+  try {
+    const raw = localStorage.getItem(PANEL_RIGHT_PCT_KEY);
+    const v = parseFloat(raw);
+    if (!Number.isNaN(v) && v >= PANEL_RIGHT_MIN && v <= PANEL_RIGHT_MAX) return v;
+  } catch (_) { /* ignore */ }
+  return PANEL_RIGHT_DEFAULT;
+}
+
+function useIsMobile(breakpoint = 768) {
+  const query = `(max-width: ${breakpoint - 1}px)`;
+  const subscribe = React.useCallback((cb) => {
+    if (typeof window === 'undefined') return () => {};
+    const mql = window.matchMedia(query);
+    mql.addEventListener('change', cb);
+    return () => mql.removeEventListener('change', cb);
+  }, [query]);
+  const getSnapshot = React.useCallback(
+    () => typeof window !== 'undefined' && window.innerWidth < breakpoint,
+    [breakpoint],
+  );
+  return React.useSyncExternalStore(subscribe, getSnapshot, () => false);
+}
+
+function parseEventAtLocal(s) {
+  if (!s) return null;
+  return parseFlexibleDate(s);
+}
+
+function caseNumberFromEvent(event) {
+  if (event.case_id != null) return event.case_id;
+  if (event.case && event.case !== '—') return String(event.case).replace('#', '');
+  return null;
+}
+
+function eventHasCase(event) {
+  return event && event.case && event.case !== '—';
+}
+
+function mockInvestigationStages(event) {
+  const base = parseEventAtLocal(event.at) || new Date();
+  const iso = (d) => d.toISOString();
+  const hasCase = eventHasCase(event);
+  if (!hasCase) {
+    return { current_stage: 'triage', triage: null, post_mortem: null, closed: null };
+  }
+
+  const triageStart = new Date(base.getTime() + 60000);
+  const triageEnd = new Date(triageStart.getTime() + 21000);
+  const isClosed = event.alert_status === 'CLOSED' || event.caseStatus === 'closed';
+
+  if (isClosed) {
+    const postStart = new Date(triageEnd.getTime() + 60000);
+    const postEnd = new Date(postStart.getTime() + 3600000);
+    const closedStart = new Date(postEnd.getTime());
+    const closedEnd = new Date(closedStart.getTime() + (3 * 24 + 6) * 3600000);
+    return {
+      current_stage: 'closed',
+      triage: { started_at: iso(triageStart), finished_at: iso(triageEnd) },
+      post_mortem: { started_at: iso(postStart), finished_at: iso(postEnd) },
+      closed: { started_at: iso(closedStart), finished_at: iso(closedEnd) },
+    };
+  }
+
+  return {
+    current_stage: 'triage',
+    triage: { started_at: iso(triageStart), finished_at: null },
+    post_mortem: null,
+    closed: null,
+  };
+}
+
+function ModalAlertStatusBadge({ alertStatus, status }) {
+  const { t } = useI18n();
+  const key = resolveAlertStatusKey(alertStatus, status);
+  const label = (t.alertStatus && t.alertStatus[key]) || key;
+  return <span className="modal-status-badge">{label}</span>;
+}
+
+function InvestigationStagesTimeline({ stages, t }) {
+  const [now, setNow] = React.useState(() => new Date());
+  React.useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const keys = ['triage', 'post_mortem', 'closed'];
+  return (
+    <div className="investigation-stages">
+      <div className="investigation-stages__row">
+        {keys.map((key, index) => {
+          const stageData = stages[key];
+          const isCompleted = stageData?.finished_at != null;
+          const isActive = stages.current_stage === key;
+          const isLast = index === keys.length - 1;
+          const endIso = stageData?.finished_at || (isActive ? now.toISOString() : null);
+          const duration = stageData?.started_at && endIso
+            ? formatDuration(stageData.started_at, endIso)
+            : '';
+          return (
+            <div key={key} className="investigation-stages__item">
+              <div className="investigation-stages__stage">
+                <div className={'investigation-stages__node' + (isCompleted ? ' is-done' : isActive ? ' is-active' : '')}>
+                  {isCompleted ? <IconCheck size={14}/> : isActive ? <span className="investigation-stages__dot"/> : null}
+                </div>
+                <div className="investigation-stages__label">
+                  <span className={'investigation-stages__title' + (isActive ? ' is-active' : isCompleted ? ' is-done' : '')}>
+                    {t.investigationStage[key]}
+                  </span>
+                  {stageData?.started_at ? (
+                    <>
+                      <span className={'investigation-stages__duration' + (isCompleted ? ' is-done' : '')}>{duration}</span>
+                      <span className="investigation-stages__meta">
+                        {formatTimestamp(stageData.started_at)}
+                        {stageData.finished_at ? ` → ${formatTimestamp(stageData.finished_at)}` : ''}
+                      </span>
+                    </>
+                  ) : (
+                    <span className="investigation-stages__meta">—</span>
+                  )}
+                </div>
+              </div>
+              {!isLast && <div className={'investigation-stages__connector' + (isCompleted ? ' is-done' : '')}/>}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function EventDetail({ event, onClose, onInvestigate, onAssign }) {
+  const { t } = useI18n();
   const [tab, setTab] = React.useState('overview');
   const [comment, setComment] = React.useState('');
   const [comments, setComments] = React.useState([]);
   const [aiInput, setAiInput] = React.useState('');
   const [assignOpen, setAssignOpen] = React.useState(false);
-  const [feedback, setFeedback] = React.useState(null); // null | 'up' | 'down'
+  const [feedback, setFeedback] = React.useState(null);
+  const [shareOpen, setShareOpen] = React.useState(false);
+  const [copied, setCopied] = React.useState(false);
+  const [isMaximized, setIsMaximized] = React.useState(false);
+  const isMobile = useIsMobile();
+  const [mobileView, setMobileView] = React.useState('detail');
+  const containerRef = React.useRef(null);
+  const [rightPct, setRightPct] = React.useState(loadStoredRightPct);
+  const [handleActive, setHandleActive] = React.useState(false);
 
   const submitComment = () => {
     const text = comment.trim();
@@ -144,259 +290,212 @@ function EventDetail({ event, onClose, onInvestigate, onAssign }) {
 
   if (!event) return null;
 
-  return (
-    <div style={{
-      position:'fixed', inset:0, zIndex:40,
-      background:'oklch(0.1 0 0 / 0.55)', backdropFilter:'blur(3px)',
-      display:'flex', alignItems:'stretch', justifyContent:'center',
-      padding:'24px',
-    }} onClick={onClose}>
-      <div onClick={e => e.stopPropagation()} style={{
-        width:'100%', maxWidth:1200, height:'100%', maxHeight:'calc(100vh - 48px)',
-        background:'var(--bg)', border:'1px solid var(--line-2)',
-        borderRadius:14, overflow:'hidden',
-        display:'grid', gridTemplateColumns:'1fr 480px', gridTemplateRows:'1fr',
-        boxShadow:'0 60px 120px -30px rgba(0,0,0,0.6)',
-        animation:'fadeUp .22s ease',
-      }}>
-        {/* Left: overview */}
-        <div style={{ display:'flex', flexDirection:'column', borderRight:'1px solid var(--line)', minWidth:0, minHeight:0, overflow:'hidden' }}>
-          <div style={{ padding:'18px 22px', borderBottom:'1px solid var(--line)' }}>
-            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10 }}>
-              <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                <SeverityPill sev={event.sev}/>
-                <StatusPill status={event.status}/>
-              </div>
-              <div style={{ display:'flex', gap:6 }}>
-                <button style={iconBtn} title="Open in new tab"><IconLink size={14}/></button>
-                <button style={iconBtn} onClick={onClose} title="Close"><IconClose size={14}/></button>
-              </div>
-            </div>
-            <div style={{ fontSize:22, fontWeight:600, letterSpacing:'-0.015em' }}>{event.title}</div>
-            <div className="mono" style={{ fontSize:11.5, color:'var(--fg-3)', marginTop:4 }}>
-              {event.service} · {event.scope} · {event.at}
-            </div>
+  const hasCase = eventHasCase(event);
+  const namespace = event.namespace || event.scope || 'default';
+  const metaLine = [event.service, namespace, formatTimestamp(event.at)].filter(Boolean).join(' · ');
+  const severityKey = resolveSeverityKey(event.severity, event.sev);
+  const tabs = [
+    { id: 'overview', label: t.alertDetail.overview },
+    { id: 'activity', label: t.alertDetail.activity },
+    { id: 'info', label: t.alertDetail.additionalInfo },
+  ];
 
-            <div style={{ display:'flex', alignItems:'flex-start', gap:0, marginTop:20 }}>
-              <Step n={1} label="Triage + RCA" active meta="Start: 17/04/2026, 16:59 · 1m"/>
-              <Connector active/>
-              <Step n={2} label="Post Mortem" meta="—"/>
-              <Connector/>
-              <Step n={3} label="Closed" meta="17/04/2026 · 7h 28m"/>
-            </div>
+  const startResize = (e) => {
+    e.preventDefault();
+    setHandleActive(true);
+    const onMove = (ev) => {
+      const el = containerRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      const pct = ((rect.right - ev.clientX) / rect.width) * 100;
+      setRightPct(Math.min(PANEL_RIGHT_MAX, Math.max(PANEL_RIGHT_MIN, pct)));
+    };
+    const onUp = () => {
+      setHandleActive(false);
+      setRightPct((cur) => {
+        const rounded = Math.round(cur * 10) / 10;
+        try { localStorage.setItem(PANEL_RIGHT_PCT_KEY, String(rounded)); } catch (_) { /* ignore */ }
+        return rounded;
+      });
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  };
+
+  const leftPanel = (
+    <div style={{ display:'flex', flexDirection:'column', minWidth:0, minHeight:0, overflow:'hidden', height:'100%' }}>
+      <div style={{ padding:'18px 22px', borderBottom:'1px solid var(--line)' }}>
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <span className={modalSeverityBadgeClass(event.severity, event.sev)}>{severityKey}</span>
+            <ModalAlertStatusBadge alertStatus={event.alert_status} status={event.status}/>
           </div>
-
-          {/* tabs */}
-          <div style={{ display:'flex', gap:2, padding:'0 22px', borderBottom:'1px solid var(--line)' }}>
-            {['overview','activity','additional info'].map(t => (
-              <button key={t} onClick={() => setTab(t)} style={{
-                padding:'11px 14px', fontSize:12.5,
-                color: tab === t ? 'var(--fg)' : 'var(--fg-3)',
-                fontWeight: tab === t ? 600 : 500,
-                borderBottom: `2px solid ${tab === t ? 'var(--accent)' : 'transparent'}`,
-                textTransform:'capitalize',
-              }}>{t}</button>
-            ))}
-          </div>
-
-          <div style={{ flex:1, overflowY:'auto', padding:'18px 22px' }}>
-            {tab === 'overview' && <OverviewPane event={event}/>}
-            {tab === 'activity' && <ActivityPane/>}
-            {tab === 'additional info' && <ExtraPane event={event}/>}
-          </div>
-
-          {/* comments */}
-          <div style={{ padding:'14px 22px', borderTop:'1px solid var(--line)' }}>
-            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:8 }}>
-              <div style={{ display:'flex', alignItems:'center', gap:7 }}>
-                <IconAlert size={13} style={{ color:'var(--fg-3)' }}/>
-                <span style={{ fontSize:12.5, fontWeight:500 }}>Case Comments</span>
-              </div>
-              <span className="mono" style={{ fontSize:10.5, color:'var(--fg-4)' }}>{comments.length} comment{comments.length === 1 ? '' : 's'}</span>
-            </div>
-            {comments.length > 0 && (
-              <div style={{ display:'flex', flexDirection:'column', gap:10, marginBottom:10 }}>
-                {comments.map((c, i) => (
-                  <div key={i} style={{ display:'flex', gap:10, alignItems:'flex-start' }}>
-                    <div style={{
-                      width:26, height:26, borderRadius:99, flexShrink:0,
-                      background: c.avatarBg,
-                      color:'#fff', fontSize:10.5, fontWeight:600,
-                      display:'flex', alignItems:'center', justifyContent:'center',
-                    }}>{c.initials}</div>
-                    <div style={{ minWidth:0, flex:1 }}>
-                      <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:2 }}>
-                        <span style={{ fontSize:12.5, fontWeight:600 }}>{c.user}</span>
-                        <span style={{ fontSize:11, color:'var(--fg-4)' }}>{c.at}</span>
-                      </div>
-                      <div style={{ fontSize:12.5, color:'var(--accent)', wordBreak:'break-word' }}>{c.text}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-            <div style={{
-              display:'flex', alignItems:'center', gap:8,
-              padding:'8px 10px', borderRadius:8,
-              background:'var(--bg-2)', border:'1px solid var(--line-2)',
-            }}>
-              <input
-                value={comment}
-                onChange={e => setComment(e.target.value)}
-                onKeyDown={e => {
-                  if (e.key === 'Enter' && !e.shiftKey && comment.trim()) {
-                    e.preventDefault();
-                    submitComment();
-                  }
-                }}
-                placeholder="Add a comment…"
-                style={{ flex:1, background:'transparent', border:0, outline:'none', color:'var(--fg)', fontSize:12.5 }}
-              />
-              <button
-                onClick={submitComment}
-                disabled={!comment.trim()}
-                style={{
-                  width:26, height:26, borderRadius:6,
-                  background:'var(--accent-glow)', border:'1px solid var(--accent-2)',
-                  color:'var(--accent)', display:'flex', alignItems:'center', justifyContent:'center',
-                  opacity: comment.trim() ? 1 : 0.5, cursor: comment.trim() ? 'pointer' : 'default',
-                }}>
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="m22 2-7 20-4-9-9-4z"/><path d="M22 2 11 13"/>
-                </svg>
+          {!isMobile && (
+            <div style={{ display:'flex', gap:6 }}>
+              <button type="button" className="btn btn--ghost btn--icon" onClick={() => setIsMaximized(m => !m)} title={isMaximized ? t.common.back : t.alertDetail.openFullPage}>
+                {isMaximized ? <IconMinimize size={14}/> : <IconExternalLink size={14}/>}
               </button>
+              <button type="button" className="btn btn--ghost btn--icon" onClick={onClose} title={t.common.close}><IconClose size={14}/></button>
             </div>
-          </div>
+          )}
         </div>
+        <div style={{ fontSize:'1.375rem', fontWeight:600, letterSpacing:'-0.015em' }}>{event.title}</div>
+        <div style={{ fontSize: '0.8125rem', color: 'var(--muted-foreground)', marginTop: 4 }}>{metaLine}</div>
+      </div>
 
-        {/* Right: case + AI reasoning */}
-        <div style={{ display:'flex', flexDirection:'column', background:'var(--bg-2)', minWidth:0, minHeight:0, overflow:'hidden' }}>
-          <div style={{ padding:'14px 18px', borderBottom:'1px solid var(--line)' }}>
-            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-              <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                <IconEye size={14} style={{ color:'var(--fg-3)' }}/>
-                <span style={{ fontSize:13, fontWeight:600 }}>Case {event.case}</span>
-              </div>
-              <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                <CaseStatus status={event.caseStatus || 'awaiting'}/>
-                <button style={{ fontSize:11.5, color:'var(--fg-2)', display:'inline-flex', alignItems:'center', gap:4 }}>
-                  Actions <IconChevron size={11} style={{ transform:'rotate(90deg)' }}/>
-                </button>
-              </div>
-            </div>
-            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginTop:10, gap:8 }}>
-              {(() => {
-                const list = currentAssignees(event);
-                return list.length
-                  ? <AssigneeStack list={list}/>
-                  : <span style={{ fontSize:12, color:'var(--fg-4)' }}>Unassigned</span>;
-              })()}
-              <div style={{ position:'relative' }}>
-                <button onClick={() => setAssignOpen(o => !o)} style={{
-                  padding:'4px 9px', borderRadius:7,
-                  border:`1px solid ${assignOpen ? 'var(--accent-2)' : 'var(--line-2)'}`,
-                  background: assignOpen ? 'var(--accent-glow)' : 'var(--bg-3)',
-                  fontSize:11.5, color: assignOpen ? 'var(--accent)' : 'var(--fg-2)',
-                  display:'inline-flex', alignItems:'center', gap:5,
-                }}>
-                  <IconPlus size={11}/> Assign
-                </button>
-                {assignOpen && (
-                  <>
-                    <div onClick={() => setAssignOpen(false)} style={{ position:'fixed', inset:0, zIndex:1 }}/>
-                    <div style={{
-                      position:'absolute', top:'calc(100% + 6px)', right:0, zIndex:2,
-                      width:280, maxHeight:360,
-                      background:'var(--bg)', border:'1px solid var(--line-2)',
-                      borderRadius:10, boxShadow:'0 20px 40px -8px rgba(0,0,0,0.5)',
-                      display:'flex', flexDirection:'column', overflow:'hidden',
-                    }}>
-                      <AssigneePickerBody
-                        assigned={currentAssignees(event)}
-                        hasCase={event.case && event.case !== '—'}
-                        onToggle={u => onAssign && onAssign({ toggle: u })}
-                      />
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
+      <div style={{ padding:'12px 22px 0', borderBottom:'1px solid var(--line)' }}>
+        <InvestigationStagesTimeline stages={mockInvestigationStages(event)} t={t}/>
+      </div>
 
-          {/* AI summary card */}
-          <div style={{ padding:'14px 18px', borderBottom:'1px solid var(--line)' }}>
-            <div style={{
-              padding:'10px 12px', borderRadius:10,
-              background:'var(--bg-3)', border:'1px solid var(--line-2)',
-              display:'flex', alignItems:'flex-start', gap:10,
-            }}>
-              <div style={{
-                width:30, height:30, borderRadius:8,
-                background:'var(--accent-glow)', border:'1px solid var(--accent-2)',
-                color:'var(--accent)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0,
-              }}>
-                <IconSparkle size={15}/>
-              </div>
-              <div style={{ flex:1, minWidth:0 }}>
-                <div style={{ fontSize:12.5, fontWeight:500, marginBottom:4 }}>Case management by Smart Ops AI</div>
-                <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
-                  <MiniBtn icon={<IconLink size={11}/>} label="Open ticket for this alert"/>
-                  <MiniBtn label="👍" raw active={feedback === 'up'} onClick={() => setFeedback(f => f === 'up' ? null : 'up')}/>
-                  <MiniBtn label="👎" raw tone="danger" active={feedback === 'down'} onClick={() => setFeedback(f => f === 'down' ? null : 'down')}/>
-                  <MiniBtn icon={<IconCopy size={11}/>} label="Share"/>
-                </div>
-              </div>
-            </div>
-          </div>
+      <div style={{ display:'flex', gap:2, padding:'0 22px', borderBottom:'1px solid var(--line)' }}>
+        {tabs.map(item => (
+          <button key={item.id} onClick={() => setTab(item.id)}
+            className={'detail-tab' + (tab === item.id ? ' is-active' : '')}>
+            {item.label}
+          </button>
+        ))}
+      </div>
 
-          {/* Reasoning thread */}
-          <div ref={scrollRef} style={{ flex:1, overflowY:'auto', padding:'14px 18px' }}>
-            {turns.map((turn, idx) => (
-              <ThreadTurn key={turn.id} turn={turn} onToggle={() => {
-                setTurns(ts => ts.map(t => t.id === turn.id ? { ...t, open: !t.open } : t));
+      <div style={{ flex:1, overflowY:'auto', padding:'18px 22px' }}>
+        {tab === 'overview' && (
+          <OverviewPane
+            event={event}
+            t={t}
+            comments={comments}
+            comment={comment}
+            setComment={setComment}
+            submitComment={submitComment}
+          />
+        )}
+        {tab === 'activity' && <ActivityPane t={t}/>}
+        {tab === 'info' && <ExtraPane event={event} t={t}/>}
+      </div>
+    </div>
+  );
+
+  const rightPanel = (
+    <div className="chat-panel">
+      <CaseManagementHeader
+        event={event}
+        hasCase={hasCase}
+        t={t}
+        assignOpen={assignOpen}
+        setAssignOpen={setAssignOpen}
+        onAssign={onAssign}
+      />
+
+      {hasCase ? (
+        <>
+          <ChatPanelHeader
+            t={t}
+            feedback={feedback}
+            setFeedback={setFeedback}
+            shareOpen={shareOpen}
+            setShareOpen={setShareOpen}
+            copied={copied}
+            onCopyChat={() => {
+              navigator.clipboard.writeText(JSON.stringify(turns, null, 2));
+              setCopied(true);
+              setTimeout(() => setCopied(false), 2000);
+            }}
+          />
+          <div ref={scrollRef} className="chat-panel__scroll">
+            {turns.map((turn) => (
+              <ThreadTurn key={turn.id} turn={turn} t={t} onToggle={() => {
+                setTurns(ts => ts.map(item => item.id === turn.id ? { ...item, open: !item.open } : item));
               }}/>
             ))}
           </div>
-
-          {/* footer actions */}
-          <div style={{ padding:'10px 18px', borderTop:'1px solid var(--line)', display:'flex', gap:8 }}>
-            <button onClick={runReinvestigate} disabled={busy} style={{...footerBtn, opacity: busy ? 0.6 : 1}}>
-              <IconInvestigate size={13}/> Reinvestigate
+          <div className="chat-panel__footer">
+            <button onClick={runReinvestigate} disabled={busy} className="chat-footer-btn">
+              <IconRotateCcw size={13}/> {t.chat.reinvestigate}
             </button>
-            <button onClick={runPostmortem} disabled={busy} style={{...footerBtn, opacity: busy ? 0.6 : 1}}>
-              <IconAlert size={13}/> Post-mortem
+            <button onClick={runPostmortem} disabled={busy} className="chat-footer-btn">
+              <IconFileText size={13}/> {t.chat.postMortem}
             </button>
           </div>
-
-          {/* composer */}
-          <div style={{ padding:'12px 18px', borderTop:'1px solid var(--line)' }}>
-            <div style={{
-              display:'flex', alignItems:'center', gap:8,
-              padding:'8px 10px', borderRadius:10,
-              background:'var(--bg)', border:'1px solid var(--line-2)',
-            }}>
+          <div className="chat-panel__input">
+            <div className="chat-input-wrap">
               <input
                 value={aiInput}
                 onChange={e => setAiInput(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter') sendMessage(); }}
-                placeholder="Ask about this alert…"
-                style={{ flex:1, background:'transparent', border:0, outline:'none', color:'var(--fg)', fontSize:12.5 }}
+                placeholder={t.chat.askPlaceholder}
               />
-              <button onClick={sendMessage} style={{
-                width:26, height:26, borderRadius:6,
-                background:'var(--accent-glow)', border:'1px solid var(--accent-2)',
-                color:'var(--accent)', display:'flex', alignItems:'center', justifyContent:'center',
-              }}>
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="m22 2-7 20-4-9-9-4z"/><path d="M22 2 11 13"/>
-                </svg>
+              <button type="button" className="chat-send-btn" onClick={sendMessage}>
+                <IconSend size={13}/>
               </button>
             </div>
           </div>
-        </div>
+        </>
+      ) : (
+        <EmptyCaseState event={event} t={t} onInvestigate={onInvestigate}/>
+      )}
+    </div>
+  );
+
+  const shell = isMobile ? (
+    <div
+      className={'modal-dialog' + (isMaximized ? ' is-maximized' : '')}
+      onClick={e => e.stopPropagation()}
+    >
+      <div className="modal-mobile-bar">
+        <button type="button" className={'modal-mobile-tab' + (mobileView === 'detail' ? ' is-active' : '')} onClick={() => setMobileView('detail')}>
+          <IconFileText size={14}/> {t.alertDetail.overview}
+        </button>
+        <button type="button" className={'modal-mobile-tab' + (mobileView === 'chat' ? ' is-active' : '')} onClick={() => setMobileView('chat')}>
+          <IconBrainCircuit size={14}/> {t.chat.aiChatTab}
+        </button>
+        <button type="button" className="modal-mobile-close" onClick={onClose} aria-label={t.common.close}>
+          <IconClose size={16}/>
+        </button>
       </div>
+      <div className="modal-mobile-body">
+        {mobileView === 'detail' ? leftPanel : (
+          <div style={{ display:'flex', flexDirection:'column', minHeight:0, flex:1, background:'var(--bg-2)', padding:12 }}>
+            {rightPanel}
+          </div>
+        )}
+      </div>
+    </div>
+  ) : (
+    <div
+      ref={containerRef}
+      className={'modal-dialog modal-dialog--split' + (isMaximized ? ' is-maximized' : '')}
+      onClick={e => e.stopPropagation()}
+    >
+      <div className="modal-split__left" style={{ width: `calc(${100 - rightPct}% - 3px)` }}>
+        {leftPanel}
+      </div>
+      <div
+        className={'panel-resize-handle' + (handleActive ? ' is-active' : '')}
+        onMouseDown={startResize}
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize panels"
+      >
+        <span className="panel-resize-handle__grip"><IconGripVertical size={10}/></span>
+      </div>
+      <div className="modal-split__right" style={{ width: `calc(${rightPct}% - 3px)` }}>
+        {rightPanel}
+      </div>
+    </div>
+  );
+
+  if (isMaximized) {
+    return (
+      <div style={{ position:'fixed', inset:0, zIndex:40, background:'var(--background)' }}>
+        {shell}
+      </div>
+    );
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      {shell}
       <style>{`
-        @keyframes fadeUp { from { opacity:0; transform: translateY(12px); } to { opacity:1; transform:none; } }
         @keyframes stepIn { from { opacity:0; transform: translateY(6px); } to { opacity:1; transform:none; } }
         @keyframes dotPulse { 0%,100% { opacity:0.3; } 50% { opacity:1; } }
         .so-turn { animation: stepIn .32s ease both; }
@@ -409,20 +508,6 @@ function EventDetail({ event, onClose, onInvestigate, onAssign }) {
   );
 }
 
-const iconBtn = {
-  width:28, height:28, borderRadius:7,
-  border:'1px solid var(--line)', color:'var(--fg-2)',
-  display:'inline-flex', alignItems:'center', justifyContent:'center',
-  background:'transparent',
-};
-
-const footerBtn = {
-  padding:'7px 11px', borderRadius:8, background:'var(--bg-3)',
-  border:'1px solid var(--line-2)', color:'var(--fg-2)',
-  fontSize:12, fontWeight:500,
-  display:'inline-flex', alignItems:'center', gap:6,
-};
-
 const codeInline = {
   fontFamily:'Geist Mono, monospace', fontSize:11,
   padding:'1px 5px', borderRadius:4,
@@ -430,108 +515,373 @@ const codeInline = {
   color:'var(--accent)',
 };
 
-function Step({ n, label, meta, active }) {
+function CaseManagementHeader({ event, hasCase, t, assignOpen, setAssignOpen, onAssign }) {
+  const [actionsOpen, setActionsOpen] = React.useState(false);
+  const list = currentAssignees(event);
+  const caseNum = caseNumberFromEvent(event);
+
+  const unassignOne = (initials) => {
+    const u = list.find(a => a.initials === initials);
+    if (u && onAssign) onAssign({ toggle: u });
+  };
+
   return (
-    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', textAlign:'center', gap:6, minWidth:110 }}>
-      <div style={{
-        width:36, height:36, borderRadius:99,
-        background: active ? 'var(--accent-glow)' : 'var(--bg-2)',
-        border:`1px solid ${active ? 'var(--accent-2)' : 'var(--line-2)'}`,
-        color: active ? 'var(--accent)' : 'var(--fg-3)',
-        display:'flex', alignItems:'center', justifyContent:'center',
-        flexShrink:0,
-      }}>
-        {active ? <IconCheck size={15}/> : <span style={{ fontSize:12, fontWeight:600 }}>{n}</span>}
+    <div className="case-mgmt">
+      <div className="case-mgmt__top">
+        <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+          <div style={{
+            width:24, height:24, borderRadius:6,
+            background:'color-mix(in oklch, var(--primary) 15%, transparent)',
+            color:'var(--primary)', display:'flex', alignItems:'center', justifyContent:'center',
+          }}>
+            <IconBriefcase size={14}/>
+          </div>
+          <span style={{ fontSize:14, fontWeight:600 }}>
+            {hasCase && caseNum != null ? `${t.cases.title} #${caseNum}` : t.cases.title}
+          </span>
+        </div>
+        {hasCase && (
+          <div className="case-mgmt__status-col">
+            <CaseStatusBadge status={event.caseStatus} caseStatus={event.case_status}/>
+            <div style={{ position:'relative' }}>
+              <button onClick={() => setActionsOpen(o => !o)} style={{
+                fontSize:11, color:'var(--foreground)', display:'inline-flex', alignItems:'center', gap:4,
+                padding:'4px 8px', borderRadius:6, border:'1px solid var(--border)', background:'transparent', height:24,
+              }}>
+                <IconChevronDown size={12}/> {t.cases.actions}
+              </button>
+              {actionsOpen && (
+                <>
+                  <div onClick={() => setActionsOpen(false)} style={{ position:'fixed', inset:0, zIndex:1 }}/>
+                  <div style={{
+                    position:'absolute', top:'calc(100% + 4px)', right:0, zIndex:2,
+                    minWidth:160, background:'var(--bg)', border:'1px solid var(--line-2)',
+                    borderRadius:8, boxShadow:'0 12px 24px -6px rgba(0,0,0,0.35)', padding:4,
+                  }}>
+                    <button style={menuItemStyle} onClick={() => setActionsOpen(false)}>{t.cases.closeCase}</button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        )}
       </div>
-      <div style={{ fontSize:12, fontWeight:500, color: active ? 'var(--fg)' : 'var(--fg-2)' }}>{label}</div>
-      <div className="mono" style={{ fontSize:10, color:'var(--fg-4)', lineHeight:1.5, minHeight:30, whiteSpace:'nowrap' }}>{meta}</div>
+      {hasCase && (
+        <div className="case-mgmt__assignees">
+          <IconUsers size={12} style={{ color:'var(--muted-foreground)', flexShrink:0, marginTop:2 }}/>
+          {list.length === 0 && (
+            <span style={{ fontSize:11, color:'var(--muted-foreground)' }}>{t.cases.noOneAssigned}</span>
+          )}
+          {list.map(a => (
+            <span key={a.initials} className="assignee-chip">
+              <span className="avatar" style={{ width:16, height:16, fontSize:8, marginLeft:0 }}>{a.initials}</span>
+              <span style={{ fontSize:11 }}>{a.name || a.initials}</span>
+              <button type="button" onClick={() => unassignOne(a.initials)} aria-label={t.alerts.unassignAll}>
+                <IconClose size={10}/>
+              </button>
+            </span>
+          ))}
+          <div style={{ position:'relative' }}>
+            <button onClick={() => setAssignOpen(o => !o)} className="assign-to-btn">
+              <IconPlus size={11}/> {t.alerts.assignTo}
+            </button>
+            {assignOpen && (
+              <>
+                <div onClick={() => setAssignOpen(false)} style={{ position:'fixed', inset:0, zIndex:1 }}/>
+                <div style={{
+                  position:'absolute', top:'calc(100% + 6px)', left:0, zIndex:2,
+                  width:280, maxHeight:360,
+                  background:'var(--bg)', border:'1px solid var(--line-2)',
+                  borderRadius:10, boxShadow:'0 20px 40px -8px rgba(0,0,0,0.5)',
+                  display:'flex', flexDirection:'column', overflow:'hidden',
+                }}>
+                  <AssigneePickerBody
+                    assigned={list}
+                    hasCase={hasCase}
+                    onToggle={u => onAssign && onAssign({ toggle: u })}
+                  />
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-function Connector({ active }) {
+const menuItemStyle = {
+  width:'100%', display:'flex', alignItems:'center', gap:8,
+  padding:'8px 10px', borderRadius:6, fontSize:12,
+  color:'var(--fg)', background:'transparent', border:0, cursor:'pointer', textAlign:'left',
+};
+
+function ChatPanelHeader({ t, feedback, setFeedback, shareOpen, setShareOpen, copied, onCopyChat }) {
   return (
-    <div style={{
-      height:1, background: active ? 'var(--accent-2)' : 'var(--line-2)',
-      marginTop:-44, minWidth:20,
-    }}/>
+    <div className="chat-panel-header">
+      <div className="chat-panel-header__icon">
+        <IconBrainCircuit size={16}/>
+        <span className="chat-panel-header__dot"/>
+      </div>
+      <div className="chat-panel-header__title">
+        <h3>{t.chat.aiAssistant}</h3>
+      </div>
+      <div className="chat-panel-header__actions">
+        <button type="button" className="chat-icon-btn" title={t.support.openAlertTicket} aria-label={t.support.openAlertTicket}>
+          <IconLifeBuoy size={14}/>
+        </button>
+        <button
+          type="button"
+          className={'chat-icon-btn' + (feedback === 'up' ? ' is-active' : '')}
+          aria-label={t.chat.helpful}
+          onClick={() => setFeedback(f => f === 'up' ? null : 'up')}
+        >
+          <IconThumbsUp size={14}/>
+        </button>
+        <button
+          type="button"
+          className={'chat-icon-btn' + (feedback === 'down' ? ' is-danger-active' : '')}
+          aria-label={t.chat.notHelpful}
+          onClick={() => setFeedback(f => f === 'down' ? null : 'down')}
+        >
+          <IconThumbsDown size={14}/>
+        </button>
+        <div style={{ position:'relative' }}>
+          <button type="button" className="chat-share-btn" onClick={() => setShareOpen(o => !o)} aria-label={t.rca.share}>
+            <IconShare size={14}/> <span>{t.rca.share}</span>
+          </button>
+          {shareOpen && (
+            <>
+              <div onClick={() => setShareOpen(false)} style={{ position:'fixed', inset:0, zIndex:1 }}/>
+              <div style={{
+                position:'absolute', top:'calc(100% + 4px)', right:0, zIndex:2,
+                minWidth:180, background:'var(--bg)', border:'1px solid var(--line-2)',
+                borderRadius:10, boxShadow:'0 12px 24px -6px rgba(0,0,0,0.35)', padding:4, overflow:'hidden',
+              }}>
+                <button style={menuItemStyle} onClick={() => { onCopyChat(); setShareOpen(false); }}>
+                  {copied ? <IconCheck size={12}/> : <IconCopy size={12}/>}
+                  {copied ? t.rca.copied : t.chat.copyFullChat}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 
-function OverviewPane({ event }) {
+function EmptyCaseState({ event, t, onInvestigate }) {
+  return (
+    <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'32px 24px', textAlign:'center', minHeight:300 }}>
+      <div style={{
+        width:64, height:64, borderRadius:9999, marginBottom:16,
+        background:'color-mix(in oklch, var(--primary) 10%, transparent)',
+        border:'2px solid color-mix(in oklch, var(--primary) 20%, transparent)',
+        color:'var(--primary)', display:'flex', alignItems:'center', justifyContent:'center',
+      }}>
+        <IconBrainCircuit size={32}/>
+      </div>
+      <div style={{ fontSize:18, fontWeight:600, marginBottom:6 }}>{t.cases.noCaseOpened}</div>
+      <p style={{ fontSize:14, color:'var(--muted-foreground)', maxWidth:280, lineHeight:1.5, margin:'0 0 20px' }}>
+        {t.alerts.createCaseDescription}
+      </p>
+      <button type="button" className="btn btn--primary btn--sm" onClick={() => onInvestigate && onInvestigate(event)}>
+        <IconBrainCircuit size={14}/> {t.investigate.startInvestigation}
+      </button>
+    </div>
+  );
+}
+
+function OverviewPane({ event, t, comments, comment, setComment, submitComment }) {
+  const primaryLabels = [
+    ['app', event.service || 'unknown'],
+    ['severity', (event.sev || 'info').toLowerCase()],
+    ['namespace', event.namespace || event.scope || 'default'],
+    ['alertname', (event.title || '').replace(/\s+/g, '')],
+  ];
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:18 }}>
-      <Card title="Description" icon={<IconAlert size={13}/>}>
-        <KVRow k="SUMMARY" v={`${event.service === 'api' ? 'API endpoint returning 500 errors at elevated rate' : event.detail}`}/>
-        <KVRow k="DETAILS"  v={event.detail}/>
-        <KVRow k="LABELS" v={
-          <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
-            {[['app','sim-pod-unhealthy'],['job','kubernetes-pods'],['severity', event.sev?.toLowerCase() || 'info'],['alertname', (event.title || '').replace(/\s+/g,'')],['namespace', event.scope || 'default']].map(([k, v]) => (
-              <span key={k} style={{
-                padding:'3px 9px', borderRadius:99, fontSize:11,
-                background:'oklch(0.94 0.03 230)',
-                border:'1px solid oklch(0.85 0.05 230)',
-                color:'oklch(0.45 0.15 240)',
-              }}>
-                <span>{k}: </span>
-                <span style={{ fontWeight:600 }}>{v}</span>
-              </span>
-            ))}
+      <div className="card" style={{ padding:16 }}>
+        <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:16 }}>
+          <div style={{
+            width:24, height:24, borderRadius:6,
+            background:'color-mix(in oklch, var(--primary) 15%, transparent)',
+            color:'var(--primary)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0,
+          }}>
+            <IconClock size={14}/>
           </div>
-        }/>
-      </Card>
+          <h3 style={{ fontSize:'0.875rem', fontWeight:600, margin:0 }}>{t.alerts.description}</h3>
+        </div>
+        <div style={{ marginLeft:32, display:'flex', flexDirection:'column', gap:12 }}>
+          <div>
+            <p className="overview-label">{t.alertDetail.summary}</p>
+            <p style={{ fontSize:'0.875rem', lineHeight:1.6, margin:0 }}>{event.detail}</p>
+          </div>
+          <div style={{ height:1, background:'var(--border)' }}/>
+          <div>
+            <p className="overview-label">{t.alertDetail.details}</p>
+            <p style={{ fontSize:'0.875rem', lineHeight:1.6, margin:0 }}>{event.detail}</p>
+          </div>
+          <div style={{ height:1, background:'var(--border)' }}/>
+          <div>
+            <p className="overview-label">{t.alerts.labels}</p>
+            <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+              {primaryLabels.map(([k, v]) => (
+                <span key={k} className="alert-label-chip">
+                  <span className="alert-label-chip__key">{k}:</span>
+                  <span className="alert-label-chip__val">{v}</span>
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+      <CommentsSection t={t} comments={comments} comment={comment} setComment={setComment} submitComment={submitComment}/>
     </div>
   );
 }
 
-function ActivityPane() {
+function CommentsSection({ t, comments, comment, setComment, submitComment }) {
+  return (
+    <div className="card" style={{ padding:16 }}>
+      <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:16 }}>
+        <div style={{
+          width:24, height:24, borderRadius:6,
+          background:'color-mix(in oklch, var(--primary) 15%, transparent)',
+          color:'var(--primary)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0,
+        }}>
+          <IconPenLine size={14}/>
+        </div>
+        <h3 style={{ fontSize:'0.875rem', fontWeight:600, margin:0, flex:1 }}>{t.cases.caseComments}</h3>
+        <span style={{ fontSize:11, color:'var(--muted-foreground)' }}>
+          {comments.length} {comments.length === 1 ? t.cases.comment : t.cases.comments}
+        </span>
+      </div>
+      <div style={{ marginLeft:32 }}>
+        {comments.length > 0 && (
+          <div style={{ display:'flex', flexDirection:'column', gap:10, marginBottom:10 }}>
+            {comments.map((c, i) => (
+              <div key={i} style={{ display:'flex', gap:10, alignItems:'flex-start' }}>
+                <div style={{
+                  width:26, height:26, borderRadius:99, flexShrink:0,
+                  background: c.avatarBg,
+                  color:'#fff', fontSize:10.5, fontWeight:600,
+                  display:'flex', alignItems:'center', justifyContent:'center',
+                }}>{c.initials}</div>
+                <div style={{ minWidth:0, flex:1 }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:2 }}>
+                    <span style={{ fontSize:12.5, fontWeight:600 }}>{c.user}</span>
+                    <span style={{ fontSize:11, color:'var(--fg-4)' }}>{c.at}</span>
+                  </div>
+                  <div style={{ fontSize:12.5, color:'var(--accent)', wordBreak:'break-word' }}>{c.text}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="comment-composer">
+          <input
+            value={comment}
+            onChange={e => setComment(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter' && !e.shiftKey && comment.trim()) {
+                e.preventDefault();
+                submitComment();
+              }
+            }}
+            placeholder={t.alertDetail.addComment}
+          />
+          <button type="button" onClick={submitComment} disabled={!comment.trim() || comment.length > COMMENT_MAX_LENGTH}>
+            <IconSend size={13}/>
+          </button>
+        </div>
+        <p className="comment-counter" style={{ color: comment.length > COMMENT_MAX_LENGTH ? 'var(--destructive)' : 'var(--muted-foreground)' }}>
+          {comment.length}/{COMMENT_MAX_LENGTH}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+const COMMENT_MAX_LENGTH = 3000;
+
+function ActivityPane({ t }) {
   const acts = [
-    { t:'17:00', who:'System', text:'Case created and triaged automatically'},
-    { t:'16:59', who:'Smart Ops AI', text:'Root cause analysis generated · confidence 0.72'},
+    { t:'17:00', who:'System', text: t.alertDetail.alertCreated },
+    { t:'16:59', who:'SmartOps AI', text:'Root cause analysis generated · confidence 0.72'},
     { t:'16:59', who:'Prometheus', text:'Alert fired · /api/v1/payments 500 rate above 15%'},
   ];
   return (
-    <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-      {acts.map((a, i) => (
-        <div key={i} style={{
-          display:'grid', gridTemplateColumns:'50px 1fr', gap:12,
-          padding:'10px 12px', borderRadius:8,
-          background:'var(--bg-2)', border:'1px solid var(--line)',
+    <div className="card" style={{ padding:16 }}>
+      <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:16 }}>
+        <div style={{
+          width:24, height:24, borderRadius:6,
+          background:'color-mix(in oklch, var(--primary) 15%, transparent)',
+          color:'var(--primary)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0,
         }}>
-          <div className="mono" style={{ fontSize:10.5, color:'var(--fg-3)' }}>{a.t}</div>
-          <div>
-            <div style={{ fontSize:11, color:'var(--fg-3)' }} className="mono">{a.who.toUpperCase()}</div>
-            <div style={{ fontSize:12.5, marginTop:2 }}>{a.text}</div>
-          </div>
+          <IconMessageSquare size={14}/>
         </div>
-      ))}
+        <h3 style={{ fontSize:'0.875rem', fontWeight:600, margin:0 }}>{t.alertDetail.activity}</h3>
+      </div>
+      <div className="activity-timeline" style={{ marginLeft:32 }}>
+        {acts.map((a, i) => (
+          <div key={i} className="activity-timeline__item">
+            <div className="activity-timeline__rail">
+              <div className="activity-timeline__dot"/>
+              {i < acts.length - 1 && <div className="activity-timeline__line"/>}
+            </div>
+            <div className="activity-timeline__body">
+              <div className="activity-timeline__meta">
+                <span className="mono">{a.t}</span>
+                <span className="mono">{a.who.toUpperCase()}</span>
+              </div>
+              <div className="activity-timeline__text">{a.text}</div>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
 
-function ExtraPane({ event }) {
-  const rows = [
-    ['Event ID', `evt_${(event.case || '').replace('#','')}_01H8`],
-    ['Fingerprint', '4d:8a:21:bb:61'],
-    ['Runbook', 'R-204 · Gateway rolling restart'],
-    ['Ingested at', event.at],
-    ['Source host', 'monitor-prod-03.eu-west-1'],
-    ['Retention', '30 days'],
-  ];
+function ExtraPane({ event, t }) {
+  const [copied, setCopied] = React.useState(false);
+  const payload = {
+    id: event.id,
+    alert_name: event.title,
+    alert_description: event.detail,
+    severity: event.severity || event.sev?.toUpperCase(),
+    alert_status: event.alert_status,
+    component: event.service,
+    source_client: event.source_client,
+    source_project: event.source_project,
+    source_environment: event.source_environment,
+    source_name: event.source,
+    case_id: event.case !== '—' ? event.case.replace('#', '') : null,
+    case_status: event.case_status,
+    agent_status: event.agent_status,
+    created_at: event.at,
+    tags: event.labels,
+  };
+  const jsonString = JSON.stringify(payload, null, 2);
+  const handleCopy = () => {
+    navigator.clipboard.writeText(jsonString);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
   return (
-    <div style={{ border:'1px solid var(--line)', borderRadius:10, overflow:'hidden' }}>
-      {rows.map((r, i) => (
-        <div key={i} style={{
-          display:'grid', gridTemplateColumns:'160px 1fr',
-          padding:'10px 12px',
-          background: i % 2 ? 'var(--bg-2)' : 'transparent',
-          borderBottom: i === rows.length - 1 ? 'none' : '1px solid var(--line)',
-          fontSize:12.5,
-        }}>
-          <div className="mono" style={{ color:'var(--fg-3)', fontSize:11 }}>{r[0]}</div>
-          <div className="mono" style={{ color:'var(--fg)' }}>{r[1]}</div>
+    <div className="json-payload-card">
+      <div className="json-payload-card__header">
+        <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+          <div className="json-payload-card__icon"><IconDatabase size={14}/></div>
+          <span style={{ fontSize:'0.8125rem', fontWeight:600 }}>{t.alertDetail.jsonPayload}</span>
         </div>
-      ))}
+        <button type="button" className="btn btn--ghost btn--sm" onClick={handleCopy}>
+          {copied ? <><IconCheck size={12}/> {t.common.copied}</> : <><IconCopy size={12}/> {t.common.copy}</>}
+        </button>
+      </div>
+      <pre className="json-payload-card__body mono">{jsonString}</pre>
     </div>
   );
 }
@@ -539,14 +889,11 @@ function ExtraPane({ event }) {
 function Card({ title, icon, children }) {
   return (
     <div>
-      <div style={{ display:'flex', alignItems:'center', gap:7, marginBottom:10, color:'var(--fg-2)' }}>
+      <div style={{ display:'flex', alignItems:'center', gap:7, marginBottom:10, color:'var(--muted-foreground)' }}>
         {icon}
-        <span style={{ fontSize:12.5, fontWeight:500 }}>{title}</span>
+        <span style={{ fontSize:'0.8125rem', fontWeight:500 }}>{title}</span>
       </div>
-      <div style={{
-        padding:'14px 14px 4px', borderRadius:10,
-        background:'var(--bg-2)', border:'1px solid var(--line)',
-      }}>{children}</div>
+      <div className="card" style={{ padding:'14px 14px 4px' }}>{children}</div>
     </div>
   );
 }
@@ -602,7 +949,7 @@ function MiniBtn({ icon, label, raw, active, onClick, tone }) {
 
 // ----- reasoning thread -----
 
-function ThreadTurn({ turn, onToggle }) {
+function ThreadTurn({ turn, onToggle, t }) {
   if (turn.kind === 'reasoning') {
     return (
       <div className="so-turn" style={{ marginBottom:18 }}>
@@ -611,8 +958,8 @@ function ThreadTurn({ turn, onToggle }) {
           background:'transparent', border:0, padding:0, cursor:'pointer',
         }}>
           <IconChevron size={12} style={{ transform: turn.open ? 'rotate(90deg)' : 'none', color:'var(--fg-3)', transition:'transform .15s' }}/>
-          <IconSparkle size={13} style={{ color:'var(--accent)' }}/>
-          <span style={{ fontSize:12.5, fontWeight:500 }}>Reasoning</span>
+          <IconBrainCircuit size={14} style={{ color:'var(--primary)' }}/>
+          <span style={{ fontSize:12.5, fontWeight:500 }}>{t.chat.reasoning}</span>
           <span className="mono" style={{ fontSize:10, color:'var(--fg-4)' }}>{turn.steps.length} step{turn.steps.length === 1 ? '' : 's'}</span>
         </button>
         {turn.open && (
@@ -701,9 +1048,9 @@ function ThreadTurn({ turn, onToggle }) {
       <div className="so-turn" style={{ display:'flex', gap:8, marginBottom:14, alignItems:'flex-start' }}>
         <div style={{
           width:24, height:24, borderRadius:99, flexShrink:0,
-          background:'var(--accent-glow)', border:'1px solid var(--accent-2)',
-          color:'var(--accent)', display:'flex', alignItems:'center', justifyContent:'center',
-        }}><IconSparkle size={12}/></div>
+          background:'color-mix(in oklch, var(--primary) 15%, transparent)', border:'1px solid color-mix(in oklch, var(--primary) 30%, transparent)',
+          color:'var(--primary)', display:'flex', alignItems:'center', justifyContent:'center',
+        }}><IconBrainCircuit size={12}/></div>
         <div style={{ fontSize:12.5, lineHeight:1.6, color:'var(--fg-2)', paddingTop:3 }}>{turn.text}</div>
       </div>
     );
@@ -714,9 +1061,9 @@ function ThreadTurn({ turn, onToggle }) {
       <div className="so-turn" style={{ display:'flex', gap:8, marginBottom:14, alignItems:'center' }}>
         <div style={{
           width:24, height:24, borderRadius:99, flexShrink:0,
-          background:'var(--accent-glow)', border:'1px solid var(--accent-2)',
-          color:'var(--accent)', display:'flex', alignItems:'center', justifyContent:'center',
-        }}><IconSparkle size={12}/></div>
+          background:'color-mix(in oklch, var(--primary) 15%, transparent)', border:'1px solid color-mix(in oklch, var(--primary) 30%, transparent)',
+          color:'var(--primary)', display:'flex', alignItems:'center', justifyContent:'center',
+        }}><IconBrainCircuit size={12}/></div>
         <div className="so-think" style={{ paddingTop:2 }}>
           <span/><span/><span/>
         </div>
@@ -757,29 +1104,13 @@ function AssigneeStack({ list }) {
   const rest = list.length - shown.length;
   return (
     <div style={{ display:'flex', alignItems:'center', gap:8, minWidth:0 }}>
-      <div style={{ display:'flex' }}>
+      <div className="avatar-stack">
         {shown.map((a, i) => (
-          <div key={a.initials + i} title={a.name} style={{
-            width:24, height:24, borderRadius:99,
-            background:'linear-gradient(135deg, oklch(0.55 0.12 200), oklch(0.45 0.12 260))',
-            color:'#fff', fontSize:9.5, fontWeight:600,
-            display:'flex', alignItems:'center', justifyContent:'center',
-            border:'2px solid var(--bg-2)',
-            marginLeft: i === 0 ? 0 : -8,
-            boxShadow:'0 0 0 1px var(--line-2)',
-          }}>{a.initials}</div>
+          <div key={a.initials + i} className="avatar" title={a.name} style={{ zIndex: shown.length - i }}>{a.initials}</div>
         ))}
-        {rest > 0 && (
-          <div style={{
-            width:24, height:24, borderRadius:99, marginLeft:-8,
-            background:'var(--bg-3)', border:'2px solid var(--bg-2)',
-            color:'var(--fg-2)', fontSize:9.5, fontWeight:600,
-            display:'flex', alignItems:'center', justifyContent:'center',
-            boxShadow:'0 0 0 1px var(--line-2)',
-          }}>+{rest}</div>
-        )}
+        {rest > 0 && <div className="avatar" style={{ zIndex: 0 }}>+{rest}</div>}
       </div>
-      <span style={{ fontSize:12, color:'var(--fg-2)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
+      <span style={{ fontSize:'0.875rem', color:'var(--muted-foreground)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
         {list.length === 1 ? list[0].name : `${list.length} assignees`}
       </span>
     </div>

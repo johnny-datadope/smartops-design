@@ -2,33 +2,29 @@
 //
 // URL formats:
 //   #/login                #/events            #/events/:index
-//   #/users                #/admin             #/admin/:section   (users|roles|audit)
+//   #/admin                #/admin/:section    (manage-users|usage)
 
-// URL slug ↔ internal section key. Slugs are what team members see in Jira links;
-// internal keys are what the admin page renders against.
-const ADMIN_SLUG_TO_SECTION = { 'manage-users':'users', 'usage':'usage', 'usage-v2':'usage-v2', 'roles':'roles', 'audit':'audit' };
-const ADMIN_SECTION_TO_SLUG = { 'users':'manage-users', 'usage':'usage', 'usage-v2':'usage-v2', 'roles':'roles', 'audit':'audit' };
+const ADMIN_SLUG_TO_SECTION = { 'manage-users': 'users', 'usage': 'usage' };
+const ADMIN_SECTION_TO_SLUG = { 'users': 'manage-users', 'usage': 'usage' };
 
 function parseHash(hash) {
   const raw = (hash || '').replace(/^#\/?/, '');
   const [head, ...rest] = raw.split('/').filter(Boolean);
   const seg = head || 'events';
-  if (seg === 'login')  return { route:'login' };
-  if (seg === 'users')  return { route:'users' };
+  if (seg === 'login') return { route: 'login' };
   if (seg === 'admin') {
     const section = ADMIN_SLUG_TO_SECTION[rest[0]] || 'users';
-    return { route:'admin', section };
+    return { route: 'admin', section };
   }
   if (seg === 'events') {
     const idx = rest[0] != null && /^\d+$/.test(rest[0]) ? +rest[0] : null;
-    return { route:'events', detailId: idx != null && idx >= 0 && idx < EVENTS.length ? idx : null };
+    return { route: 'events', detailId: idx != null && idx >= 0 && idx < EVENTS.length ? idx : null };
   }
-  return { route:'events', detailId: null };
+  return { route: 'events', detailId: null };
 }
 
 function buildHash({ route, detailId, section }) {
   if (route === 'login') return '#/login';
-  if (route === 'users') return '#/users';
   if (route === 'admin') {
     const slug = ADMIN_SECTION_TO_SLUG[section] || 'manage-users';
     return `#/admin/${slug}`;
@@ -58,37 +54,34 @@ function App() {
     try { return JSON.parse(raw); } catch { return { method: raw, role: 'Admin' }; }
   });
   const [hashState, navigate] = useHashRoute();
-  const [theme, setTheme] = React.useState(() => localStorage.getItem('smartops.theme') || 'dark');
+  const [theme, setTheme] = React.useState(() => {
+    const stored = localStorage.getItem('smartops.theme') || 'dark';
+    return stored === 'system' ? 'dark' : stored;
+  });
   React.useEffect(() => {
     localStorage.setItem('smartops.theme', theme);
-    const resolved = theme === 'system'
-      ? (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark')
-      : theme;
-    document.documentElement.setAttribute('data-theme', resolved);
+    document.documentElement.setAttribute('data-theme', theme === 'light' ? 'light' : 'dark');
   }, [theme]);
   const [, setTick] = React.useState(0);
 
-  // Seed the URL if none was provided.
   React.useEffect(() => {
     if (!window.location.hash) {
       window.location.replace('#/' + (user ? 'events' : 'login'));
     }
   }, []);
 
-  // Logged-out users can only see #/login. Remember where they wanted to go.
   const pendingHashRef = React.useRef(null);
   React.useEffect(() => {
     if (user) return;
     if (hashState.route !== 'login') {
       pendingHashRef.current = buildHash(hashState);
-      navigate({ route:'login' });
+      navigate({ route: 'login' });
     }
   }, [user, hashState, navigate]);
 
-  // Non-admin users can't see the admin route.
   React.useEffect(() => {
     if (user && hashState.route === 'admin' && user.role !== 'Admin') {
-      navigate({ route:'events', detailId:null });
+      navigate({ route: 'events', detailId: null });
     }
   }, [user, hashState, navigate]);
 
@@ -105,33 +98,33 @@ function App() {
   const handleLogout = () => {
     localStorage.removeItem('smartops.user');
     setUser(null);
-    navigate({ route:'login' });
+    navigate({ route: 'login' });
   };
 
   if (!user) return <Login onLogin={handleLogin}/>;
 
   const { route, detailId, section } = hashState;
-  const setRoute = (r) => navigate({ route:r, detailId:null, section:undefined });
-  const setDetailId = (id) => navigate({ route:'events', detailId:id });
-  const setAdminSection = (s) => navigate({ route:'admin', section:s });
+  const setRoute = (r) => navigate({ route: r, detailId: null, section: undefined });
+  const setDetailId = (id) => navigate({ route: 'events', detailId: id });
+  const setAdminSection = (s) => navigate({ route: 'admin', section: s });
 
   return (
-    <div data-screen-label="01 Events Dashboard" style={{ minHeight:'100vh' }}>
+    <div data-screen-label="01 Events Dashboard" style={{ minHeight: '100vh', display:'flex', flexDirection:'column' }}>
       <TopBar onLogout={handleLogout} route={route} setRoute={setRoute} theme={theme} setTheme={setTheme} currentUser={user}/>
-      {route === 'users' ? (
-        <UsersPage currentUser={user}/>
-      ) : route === 'admin' && user?.role === 'Admin' ? (
+      <div style={{ flex:1 }}>
+      {route === 'admin' && user?.role === 'Admin' ? (
         <AdministrationPage theme={theme} setTheme={setTheme} section={section} setSection={setAdminSection} currentUser={user}/>
       ) : (
         <EventsPage onOpenDetail={setDetailId} currentUser={user}/>
       )}
+      </div>
+      <AppFooter/>
       <EventDetail
         event={detailId != null ? EVENTS[detailId] : null}
         onClose={() => setDetailId(null)}
         onAssign={(payload) => {
           if (detailId == null || !payload) return;
           const ev = EVENTS[detailId];
-          // Normalise to the array form on first write so we never lose state.
           let list = Array.isArray(ev.assignees)
             ? [...ev.assignees]
             : (ev.assignee ? [{ initials: ev.assignee, name: ev.assigneeName || '' }] : []);
@@ -146,11 +139,9 @@ function App() {
           }
 
           ev.assignees = list;
-          // Keep legacy single fields mirrored to the first assignee so table
-          // cells and other views keep working unchanged.
+          ev.assignments = list.map(a => ({ initials: a.initials, full_name: a.name }));
           ev.assignee = list[0]?.initials || null;
           ev.assigneeName = list[0]?.name || null;
-
           setTick(t => t + 1);
         }}
       />
@@ -158,4 +149,23 @@ function App() {
   );
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+function AppFooter() {
+  const { t } = useI18n();
+  return (
+    <footer style={{
+      padding:'10px 24px', borderTop:'1px solid var(--line)',
+      fontSize:11, color:'var(--muted-foreground)', textAlign:'center',
+    }}>
+      {t.footer.version.replace('{version}', '0.1.0-mock')}
+    </footer>
+  );
+}
+
+function bootApp() {
+  if (!window.__ICONS_READY__ || typeof App !== 'function') {
+    requestAnimationFrame(bootApp);
+    return;
+  }
+  ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+}
+bootApp();

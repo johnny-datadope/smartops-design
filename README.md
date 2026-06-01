@@ -1,6 +1,6 @@
 # Smart Ops Design
 
-Design prototype for the Smart Ops UI.
+Static design prototype for the SmartOps UI, aligned with [Apolo](../chia/src/apolo) (Datadope tokens, Events dashboard, admin shell).
 
 Published at https://johnny-datadope.github.io/smartops-design/
 
@@ -10,20 +10,69 @@ Published at https://johnny-datadope.github.io/smartops-design/
 npx live-server --port=5173
 ```
 
+Open http://127.0.0.1:5173 — sign in with any credentials (mock auth).
+
+## Routes (hash-based)
+
+| URL | View |
+|-----|------|
+| `#/login` | Login |
+| `#/events` | Events dashboard |
+| `#/events/:index` | Event detail modal |
+| `#/admin/manage-users` | Manage Users |
+| `#/admin/usage` | Usage & Costs |
+
 ## Layout
 
 ```
-index.html         # entry — styles + script tags
+index.html         # entry — Datadope CSS vars, Open Sans, utility classes, script tags
+uploads/           # smartops-logo.svg, smartops-logo-white.svg
 src/
-  app.jsx          # App shell, routing, global state
-  chrome.jsx       # TopBar, user menu, language switcher
+  theme.js         # severity / status / KPI metadata, badge class maps
+  i18n.js          # en-GB / es-ES strings
+  badges.jsx       # Apolo-aligned badge components (shared)
+  app.jsx          # shell, routing, auth, theme (light/dark)
+  chrome.jsx       # TopBar + UserMenu (Apolo-style)
   login.jsx
-  events.jsx       # Events dashboard (default route)
-  event_detail.jsx
-  investigation.jsx
-  users.jsx        # /users route
-  administration.jsx # /admin route (Admin role only)
-  data.jsx         # mock data
-  icons.jsx        # shared SVG icon set
-uploads/           # static image assets
+  events.jsx       # Events dashboard (KPIs, filters, table, pagination)
+  event_detail.jsx # 90vw modal, split-pane detail + AI chat
+  users.jsx
+  administration.jsx
+  usage.jsx
+  data.jsx         # mock ALERTS seed data
+  icons.jsx
 ```
+
+## CSS utility classes (`index.html`)
+
+| Class | Purpose |
+|-------|---------|
+| `.layout-page` | Page padding + vertical rhythm |
+| `.layout-header` / `.layout-header-inner` | Sticky app header |
+| `.card` | Surface with border + radius |
+| `.stat-card` / `.stat-card--active` | KPI cards (hover scale, active ring) |
+| `.btn` + variants | Primary, outline, ghost, sm, icon |
+| `.badge` + variants | Datadope tints (severity, status, muted, etc.) |
+| `.input` / `.input-wrap` | Form fields |
+| `.avatar` / `.avatar-stack` / `.avatar--empty` | Assignee avatars (`primary/10`) |
+| `.table-pagination` | Apolo-style table footer |
+| `.active-filters` / `.filter-chip` | Removable filter chips |
+| `.modal-overlay` / `.modal-dialog` | Alert detail modal (90vw × 80vh) |
+| `.user-avatar` | Header user menu avatar |
+
+## Visual checklist (Apolo sync)
+
+- [x] KPI cards: ring on active filter, hover scale
+- [x] Filters popover + active filter chips (Customer/Project/Environment)
+- [x] Table: Event Status, Customer, Time columns; assignee avatars; empty state
+- [x] Pagination: page numbers + rows selector
+- [x] Modal: timeline, Overview comments, JSON payload, CaseManagement, ChatPanelHeader
+- [x] Admin Users / Usage: i18n, Password column, Cases KPI
+- [x] User menu: theme Light / Dark only (no System); logout copy; footer version
+- [x] Default locale es-ES; login i18n
+
+## Legacy
+
+`investigation.jsx` and `usage_v2.jsx` were removed; their script tags are not loaded from `index.html`.
+
+Legacy field aliases in `data.jsx` (`alertRow`) remain for backward compatibility with `usage.jsx` drilldown mocks.

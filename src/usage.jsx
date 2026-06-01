@@ -181,6 +181,7 @@ function formatDMY(d) {
 // means "this day was at the period's peak for all three metrics".
 
 function UsageMetricsPage() {
+  const { t } = useI18n();
   const [range, setRange] = React.useState('30d');
   const [customRange, setCustomRange] = React.useState(null);
   const [drillIdx, setDrillIdx] = React.useState(null);
@@ -250,11 +251,11 @@ function UsageMetricsPage() {
   const bucketTitle = BUCKET_TITLE[bucket];
 
   return (
-    <div data-screen-label="05 Usage & Costs" style={{ padding:'22px 28px 40px' }}>
-      <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:20, marginBottom:18 }}>
+    <div className="layout-page" data-screen-label="05 Usage & Costs">
+      <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:20 }}>
         <div>
-          <h1 style={{ fontSize:26, fontWeight:600, letterSpacing:'-0.02em', margin:0 }}>Usage & Costs</h1>
-          <div style={{ fontSize:12.5, color:'var(--fg-3)', marginTop:4 }}>Monitor AI consumption and automation ROI over time</div>
+          <h1 style={{ fontSize:'1.75rem', fontWeight:700, letterSpacing:'-0.02em', margin:0 }}>{t.admin.usageTitle}</h1>
+          <div style={{ fontSize:'0.875rem', color:'var(--muted-foreground)', marginTop:4 }}>{t.admin.usageSubtitle}</div>
         </div>
         <UsageRangePicker
           range={range}
@@ -263,45 +264,42 @@ function UsageMetricsPage() {
         />
       </div>
 
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:14, marginBottom:18 }}>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:12 }}>
         <UsageSummary
-          label="Total cost"
+          label={t.admin.usage.totalCost}
           value={`$${totals.cost.toFixed(2)}`}
-          sub={`avg $${avg.cost.toFixed(2)} / ${bucketNoun}`}
+          sub={t.admin.usage.avgPerDay.replace('{value}', `$${avg.cost.toFixed(2)}`)}
           accent="var(--sev-crit)"
           icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v20"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>}
         />
         <UsageSummary
-          label="Tokens consumed"
+          label={t.admin.usage.tokensConsumed}
           value={formatTokens(totals.tokens)}
-          sub={`avg ${formatTokens(avg.tokens)} / ${bucketNoun}`}
+          sub={t.admin.usage.avgPerDay.replace('{value}', formatTokens(avg.tokens))}
           accent="var(--sev-ok)"
           icon={<IconSparkle size={16}/>}
         />
         <UsageSummary
-          label="Investigations resolved"
+          label={t.admin.usage.cases}
           value={totals.investigations.toLocaleString()}
-          sub={`avg ${avg.investigations.toFixed(1)} / ${bucketNoun}`}
+          sub={t.admin.usage.avgPerDay.replace('{value}', avg.investigations.toFixed(1))}
           accent="var(--accent)"
           icon={<IconInvestigate size={16} active/>}
         />
       </div>
 
-      <div style={{ display:'grid', gridTemplateColumns:'minmax(0, 1fr) 320px', gap:14, alignItems:'start' }}>
-        <div style={{
-          background:'var(--bg-2)', border:'1px solid var(--line)',
-          borderRadius:12, padding:'18px 20px 22px',
-        }}>
+      <div style={{ display:'grid', gridTemplateColumns:'minmax(0, 1fr) 320px', gap:12, alignItems:'start' }}>
+        <div className="card" style={{ padding:'18px 20px 22px' }}>
           <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:14, gap:16, flexWrap:'wrap' }}>
             <div>
-              <div style={{ fontSize:13.5, fontWeight:600 }}>{bucketTitle}</div>
+              <div style={{ fontSize:13.5, fontWeight:600 }}>{t.admin.usage.dailyBreakdown}</div>
               <div style={{ fontSize:11.5, color:'var(--fg-3)', marginTop:2 }}>
-                Hover for exact values · click a {bucketNoun} to filter the case list below
+                {t.admin.usage.chartHint}
               </div>
             </div>
             <div style={{ display:'flex', gap:14, alignItems:'center', flexWrap:'wrap' }}>
-              <UsageLegendDot color="var(--accent)" label="Cost ($) · left axis"/>
-              <UsageLegendLine color="var(--sev-crit)" label="Cases · right axis"/>
+              <UsageLegendDot color="var(--accent)" label={t.admin.usage.costAxis + ' · left axis'}/>
+              <UsageLegendLine color="var(--sev-crit)" label={t.admin.usage.casesAxis + ' · right axis'}/>
             </div>
           </div>
           <UsageChart
@@ -469,23 +467,15 @@ const pickerPrimaryStyle = (disabled) => ({
 
 function UsageSummary({ label, value, sub, accent, icon }) {
   return (
-    <div style={{
-      padding:'16px 18px', borderRadius:12,
-      background:'var(--bg-2)', border:'1px solid var(--line)',
-      display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:12,
-    }}>
-      <div style={{ minWidth:0 }}>
-        <div style={{ fontSize:11.5, color:'var(--fg-3)' }}>{label}</div>
-        <div style={{ fontSize:24, fontWeight:600, letterSpacing:'-0.02em', marginTop:4 }}>{value}</div>
-        <div className="mono" style={{ fontSize:11, color:'var(--fg-4)', marginTop:4 }}>{sub}</div>
+    <div className="card stat-card" style={{ cursor: 'default', padding: '1rem 1.25rem' }}>
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:12 }}>
+        <div style={{ minWidth:0 }}>
+          <div style={{ fontSize:'1.75rem', fontWeight:700, lineHeight:1, margin:0 }}>{value}</div>
+          <div style={{ fontSize:'0.75rem', color:'var(--muted-foreground)', marginTop:8 }}>{label}</div>
+          <div className="mono" style={{ fontSize:'0.6875rem', color:'var(--muted-foreground)', marginTop:4 }}>{sub}</div>
+        </div>
+        <div className="kpi-icon" style={{ background: `color-mix(in srgb, ${accent} 15%, transparent)`, color: accent }}>{icon}</div>
       </div>
-      <div style={{
-        width:34, height:34, borderRadius:9,
-        background:`color-mix(in oklch, ${accent} 18%, transparent)`,
-        border:`1px solid color-mix(in oklch, ${accent} 35%, transparent)`,
-        display:'flex', alignItems:'center', justifyContent:'center',
-        color: accent, flexShrink:0,
-      }}>{icon}</div>
     </div>
   );
 }
@@ -823,10 +813,7 @@ function buildTopUsers(days) {
 
 function UsageTopUsers({ users, scopeLabel }) {
   return (
-    <div style={{
-      background:'var(--bg-2)', border:'1px solid var(--line)',
-      borderRadius:12, display:'flex', flexDirection:'column', minHeight:0,
-    }}>
+    <div className="card" style={{ display:'flex', flexDirection:'column', minHeight:0 }}>
       <div style={{ padding:'10px 16px 8px', borderBottom:'1px solid var(--line)' }}>
         <div style={{ fontSize:13, fontWeight:600 }}>Top users</div>
         <div style={{ fontSize:11, color:'var(--fg-3)', marginTop:1 }}>
@@ -914,6 +901,7 @@ function buildUsageDayCases(day) {
 }
 
 function UsageDrilldown({ day, rangeData, rangeTotals, rangeLabel, bucket = 'day', onClose }) {
+  const { t } = useI18n();
   const isDay = day != null;
   const cases = React.useMemo(() => {
     const all = isDay
@@ -924,8 +912,8 @@ function UsageDrilldown({ day, rangeData, rangeTotals, rangeLabel, bucket = 'day
   }, [isDay, day, rangeData]);
 
   const headerTitle = isDay
-    ? `Top 10 cases · ${formatBucketLong(day.date, bucket)}`
-    : `Top 10 cases · ${rangeLabel}`;
+    ? `${t.admin.usage.topCases} · ${formatBucketLong(day.date, bucket)}`
+    : `${t.admin.usage.topCases} · ${rangeLabel}`;
   const headerSub = isDay
     ? `${day.investigations} investigations · ${day.tokens.toLocaleString()} tokens · $${day.cost.toFixed(2)}`
     : `${rangeTotals.investigations.toLocaleString()} investigations · ${rangeTotals.tokens.toLocaleString()} tokens · $${rangeTotals.cost.toFixed(2)}`;
@@ -951,13 +939,13 @@ function UsageDrilldown({ day, rangeData, rangeTotals, rangeLabel, bucket = 'day
         <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12 }}>
           <thead>
             <tr style={{ background:'var(--bg-2)' }}>
-              <th style={usageDrillTh}>Case</th>
-              <th style={usageDrillTh}>Severity</th>
-              <th style={usageDrillTh}>Title</th>
-              <th style={usageDrillTh}>Service</th>
+              <th style={usageDrillTh}>{t.cases.title}</th>
+              <th style={usageDrillTh}>{t.alerts.severity}</th>
+              <th style={usageDrillTh}>{t.alerts.alert}</th>
+              <th style={usageDrillTh}>{t.alerts.service}</th>
               <th style={usageDrillTh}>Resolution</th>
-              <th style={{ ...usageDrillTh, textAlign:'right' }}>Tokens</th>
-              <th style={{ ...usageDrillTh, textAlign:'right' }}>Cost</th>
+              <th style={{ ...usageDrillTh, textAlign:'right' }}>{t.admin.usage.tokens}</th>
+              <th style={{ ...usageDrillTh, textAlign:'right' }}>{t.admin.usage.cost}</th>
             </tr>
           </thead>
           <tbody>

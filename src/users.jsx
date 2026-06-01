@@ -1,21 +1,22 @@
 // Manage Users — create / edit / disable users. Admin-facing CRUD.
 const USERS_SEED = [
-  { id:1, username:'ddorado',   name:'Daniel Dorado',     email:'daniel.dorado@datadope.io',   role:'Admin', language:'en', status:'active',  lastSeen:'2m ago',   source:'Google',    initials:'DD' },
-  { id:2, username:'fmolina',   name:'Francisca Molina',  email:'francisca.molina@datadope.io',role:'SRE',   language:'es', status:'active',  lastSeen:'11m ago',  source:'Google',    initials:'FM' },
-  { id:3, username:'mrodriguez',name:'Marelys Rodríguez', email:'marelys.r@datadope.io',       role:'SRE',   language:'es', status:'active',  lastSeen:'1h ago',   source:'Smart Ops', initials:'MR' },
-  { id:4, username:'jfernandez',name:'Jonathan Fernández',email:'jonathan.f@datadope.io',      role:'Admin', language:'es', status:'active',  lastSeen:'just now', source:'Google',    initials:'JF' },
-  { id:5, username:'apereira',  name:'Ana Pereira',       email:'ana.pereira@datadope.io',     role:'SRE',   language:'en', status:'active',  lastSeen:'3h ago',    source:'Smart Ops', initials:'AP' },
-  { id:6, username:'msilva',    name:'Mateo Silva',       email:'mateo.silva@datadope.io',     role:'SRE',   language:'en', status:'disabled',lastSeen:'14d ago',  source:'Smart Ops', initials:'MS' },
+  { id:1, username:'ddorado',   name:'Daniel Dorado',     email:'daniel.dorado@datadope.io',   role:'Admin', language:'en', status:'active',  lastSeen:'2m ago',   source:'Google',    initials:'DD', password:'••••••••' },
+  { id:2, username:'fmolina',   name:'Francisca Molina',  email:'francisca.molina@datadope.io',role:'Operator', language:'es', status:'active',  lastSeen:'11m ago',  source:'Google',    initials:'FM', password:'Google SSO' },
+  { id:3, username:'mrodriguez',name:'Marelys Rodríguez', email:'marelys.r@datadope.io',       role:'Operator', language:'es', status:'active',  lastSeen:'1h ago',   source:'Smart Ops', initials:'MR', password:'••••••••' },
+  { id:4, username:'jfernandez',name:'Jonathan Fernández',email:'jonathan.f@datadope.io',      role:'Admin', language:'es', status:'active',  lastSeen:'just now', source:'Google',    initials:'JF', password:'Google SSO' },
+  { id:5, username:'apereira',  name:'Ana Pereira',       email:'ana.pereira@datadope.io',     role:'Operator', language:'en', status:'active',  lastSeen:'3h ago',    source:'Smart Ops', initials:'AP', password:'••••••••' },
+  { id:6, username:'msilva',    name:'Mateo Silva',       email:'mateo.silva@datadope.io',     role:'Operator', language:'en', status:'disabled',lastSeen:'14d ago',  source:'Smart Ops', initials:'MS', password:'••••••••' },
 ];
 window.USERS_SEED = USERS_SEED;
 
-const ROLES = ['Admin','SRE'];
+const ROLES = ['Admin','Operator'];
 const LANGUAGES = [
   { code:'en', label:'English' },
   { code:'es', label:'Español' },
 ];
 
 function UsersPage({ currentUser }) {
+  const { t } = useI18n();
   const isAdmin = currentUser?.role === 'Admin';
   const [users, setUsers] = React.useState(USERS_SEED);
   const [statFilter, setStatFilter] = React.useState('all'); // all | admins | active | disabled
@@ -40,56 +41,48 @@ function UsersPage({ currentUser }) {
     if (!creating) setUsers(us => us.map(x => x.id === u.id ? { ...x, ...u } : x));
     else setUsers(us => [{ ...u, id: Date.now(), status: u.status || 'active', lastSeen:'—', source: u.source || 'Smart Ops', initials: initialsOf(u.name) }, ...us]);
     setEditing(null);
-    showToast(creating ? `User "${u.name}" created` : `User "${u.name}" updated`);
+    showToast(creating ? t.admin.toasts.created.replace('{name}', u.name) : t.admin.toasts.updated.replace('{name}', u.name));
   };
   const deleteUser = (id) => { setUsers(us => us.filter(x => x.id !== id)); setConfirmDelete(null); };
 
   return (
-    <div data-screen-label="03 Manage Users" style={{ padding:'22px 28px 40px' }}>
-      {/* header */}
-      <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:20, marginBottom:18 }}>
+    <div className="layout-page" data-screen-label="03 Manage Users">
+      <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:20 }}>
         <div>
-          <h1 style={{ fontSize:26, fontWeight:600, letterSpacing:'-0.02em', margin:0 }}>Manage Users</h1>
-          <div style={{ fontSize:12.5, color:'var(--fg-3)', marginTop:4 }}>Create, edit, and control access for your team</div>
+          <h1 style={{ fontSize:'1.75rem', fontWeight:700, letterSpacing:'-0.02em', margin:0 }}>{t.admin.usersTitle}</h1>
+          <div style={{ fontSize:'0.875rem', color:'var(--muted-foreground)', marginTop:4 }}>{t.admin.usersSubtitle}</div>
         </div>
         {isAdmin && (
-          <button onClick={() => setEditing('new')} style={{
-            padding:'8px 14px', borderRadius:8,
-            background:'var(--accent)', border:'1px solid var(--accent-2)',
-            color:'#fff', fontSize:12.5, fontWeight:600,
-            display:'inline-flex', alignItems:'center', gap:6,
-          }}>
-            <IconPlus size={14}/> Create user
+          <button type="button" onClick={() => setEditing('new')} className="btn btn--primary btn--sm">
+            <IconPlus size={14}/> {t.admin.createUser}
           </button>
         )}
       </div>
 
-      {/* stats */}
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(4, 1fr)', gap:14, marginBottom:18 }}>
-        <StatCard label="Total users"
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(4, 1fr)', gap:12 }}>
+        <StatCard label={t.admin.stats.totalUsers}
           value={users.length}
           accent="var(--accent)" icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>}
           active={statFilter==='all'} onClick={()=>setStatFilter('all')}/>
-        <StatCard label="Admins"
+        <StatCard label={t.admin.stats.admins}
           value={users.filter(u=>u.role==='Admin').length}
           accent="var(--sev-high)" icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>}
           active={statFilter==='admins'} onClick={()=>setStatFilter(statFilter==='admins' ? 'all' : 'admins')}/>
-        <StatCard label="Active"
+        <StatCard label={t.admin.stats.active}
           value={users.filter(u=>u.status==='active').length}
           accent="var(--sev-ok)" icon={<IconCheck size={16}/>}
           active={statFilter==='active'} onClick={()=>setStatFilter(statFilter==='active' ? 'all' : 'active')}/>
-        <StatCard label="Disabled"
+        <StatCard label={t.admin.stats.disabled}
           value={users.filter(u=>u.status==='disabled').length}
           accent="var(--fg-3)" icon={<IconClose size={16}/>}
           active={statFilter==='disabled'} onClick={()=>setStatFilter(statFilter==='disabled' ? 'all' : 'disabled')}/>
       </div>
 
-      {/* table */}
-      <div style={{ background:'var(--bg-2)', border:'1px solid var(--line)', borderRadius:12, overflow:'hidden' }}>
-        <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12.5 }}>
+      <div className="card" style={{ overflow:'hidden' }}>
+        <table style={{ width:'100%', borderCollapse:'collapse', fontSize:'0.8125rem' }}>
           <thead>
             <tr>
-              <Th>User</Th><Th>Username</Th><Th>Email</Th><Th>Role</Th><Th>Status</Th><Th>Source</Th><Th>Last active</Th><Th></Th>
+              <Th>{t.admin.table.user}</Th><Th>{t.admin.table.username}</Th><Th>{t.admin.table.email}</Th><Th>{t.admin.table.password}</Th><Th>{t.admin.table.role}</Th><Th>{t.admin.table.status}</Th><Th>Source</Th><Th>Last active</Th><Th></Th>
             </tr>
           </thead>
           <tbody>
@@ -97,21 +90,22 @@ function UsersPage({ currentUser }) {
               <tr key={u.id} style={{ borderBottom:'1px solid var(--line)' }}>
                 <td style={{ padding:'10px 12px' }}>
                   <div style={{ display:'flex', alignItems:'center', gap:9 }}>
-                    <div style={{ width:28, height:28, borderRadius:99, background:'linear-gradient(135deg, oklch(0.55 0.12 200), oklch(0.45 0.12 260))', color:'#fff', display:'flex', alignItems:'center', justifyContent:'center', fontSize:10, fontWeight:600 }}>{u.initials}</div>
+                    <div className="user-avatar">{u.initials}</div>
                     <span style={{ fontWeight:500 }}>{u.name}</span>
                   </div>
                 </td>
                 <td style={{ padding:'10px 12px', color:'var(--fg-2)' }} className="mono">{u.username}</td>
                 <td style={{ padding:'10px 12px', color:'var(--fg-2)' }} className="mono">{u.email}</td>
-                <td style={{ padding:'10px 12px' }}><RolePill role={u.role}/></td>
-                <td style={{ padding:'10px 12px' }}><UserStatusPill status={u.status}/></td>
+                <td style={{ padding:'10px 12px', color:'var(--fg-3)' }} className="mono">{u.password || '••••••••'}</td>
+                <td style={{ padding:'10px 12px' }}><RolePill role={u.role} t={t}/></td>
+                <td style={{ padding:'10px 12px' }}><UserStatusPill status={u.status} t={t}/></td>
                 <td style={{ padding:'10px 12px' }}><SourcePill source={u.source}/></td>
                 <td style={{ padding:'10px 12px', color:'var(--fg-3)' }} className="mono">{u.lastSeen}</td>
                 <td style={{ padding:'10px 12px', textAlign:'right' }}>
                   {isAdmin && (
                     <div style={{ display:'inline-flex', gap:6 }}>
-                      <button onClick={()=>setEditing(u)} style={rowBtn}>Edit</button>
-                      <button onClick={()=>setConfirmDelete(u)} style={{ ...rowBtn, color:'var(--sev-crit)', borderColor:'color-mix(in oklch, var(--sev-crit) 30%, var(--line))' }}>Remove</button>
+                      <button type="button" onClick={()=>setEditing(u)} className="btn btn--outline btn--sm">{t.admin.form.edit}</button>
+                      <button type="button" onClick={()=>setConfirmDelete(u)} className="btn btn--outline btn--sm" style={{ color:'var(--destructive)', borderColor:'color-mix(in oklch, var(--destructive) 30%, var(--border))' }}>{t.admin.form.remove}</button>
                     </div>
                   )}
                 </td>
@@ -120,7 +114,7 @@ function UsersPage({ currentUser }) {
           </tbody>
         </table>
         {filtered.length === 0 && (
-          <div style={{ padding:'40px', textAlign:'center', color:'var(--fg-3)', fontSize:12.5 }}>No users match these filters.</div>
+          <div style={{ padding:'40px', textAlign:'center', color:'var(--fg-3)', fontSize:12.5 }}>{t.admin.table.empty}</div>
         )}
       </div>
 
@@ -174,16 +168,19 @@ function MiniStat({ label, value, active, onClick }) {
   );
 }
 
-function RolePill({ role }) {
-  const hue = role === 'Admin' ? 25 : 200;
-  const c = `oklch(0.78 0.10 ${hue})`;
+function RolePill({ role, t }) {
+  const label = role === 'Admin' ? (t?.roles?.admin || role) : (t?.roles?.operator || role);
   return (
-    <span style={{
-      padding:'2px 8px', borderRadius:99, fontSize:10.5, fontWeight:500,
-      background:`color-mix(in oklch, ${c} 14%, transparent)`,
-      border:`1px solid color-mix(in oklch, ${c} 30%, transparent)`,
-      color:c,
-    }}>{role}</span>
+    <Badge className={'badge ' + (role === 'Admin' ? 'badge--warning-tint' : 'badge--secondary')}>{label}</Badge>
+  );
+}
+
+function UserStatusPill({ status, t }) {
+  const active = status === 'active';
+  return (
+    <Badge className={'badge ' + (active ? 'badge--dd-teal' : 'badge--muted')}>
+      {active ? (t?.admin?.form?.active || 'Active') : (t?.admin?.form?.disabled || 'Disabled')}
+    </Badge>
   );
 }
 
@@ -204,27 +201,11 @@ function SourcePill({ source }) {
   );
 }
 
-function UserStatusPill({ status }) {
-  const map = {
-    active:   { label:'Active',   c:'var(--sev-ok)' },
-    disabled: { label:'Disabled', c:'var(--fg-4)' },
-  };
-  const m = map[status];
-  return (
-    <span style={{
-      padding:'2px 8px', borderRadius:99, fontSize:10.5, fontWeight:500,
-      background:`color-mix(in oklch, ${m.c} 14%, transparent)`,
-      border:`1px solid color-mix(in oklch, ${m.c} 30%, transparent)`,
-      color:m.c,
-    }}>{m.label}</span>
-  );
-}
-
 function UserForm({ user, existingUsers = [], onClose, onSave }) {
   const [username, setUsername] = React.useState(user?.username || '');
   const [name, setName] = React.useState(user?.name || '');
   const [email, setEmail] = React.useState(user?.email || '');
-  const [role, setRole] = React.useState(user?.role || 'SRE');
+  const [role, setRole] = React.useState(user?.role || 'Operator');
   const [language, setLanguage] = React.useState(user?.language || 'en');
   const [password, setPassword] = React.useState('');
   const [status, setStatus] = React.useState(user?.status || 'active');
@@ -382,7 +363,7 @@ function Modal({ title, sub, children, onClose, width = 520 }) {
   return (
     <div onClick={onClose} style={{
       position:'fixed', inset:0, zIndex:50,
-      background:'oklch(0.1 0 0 / 0.55)', backdropFilter:'blur(3px)',
+      background:'rgb(0 0 0 / 0.5)',
       display:'flex', alignItems:'center', justifyContent:'center', padding:24,
     }}>
       <div onClick={e=>e.stopPropagation()} style={{
