@@ -121,6 +121,8 @@ function App() {
       <AppFooter/>
       <EventDetail
         event={detailId != null ? EVENTS[detailId] : null}
+        alertId={detailId}
+        currentUser={user}
         onClose={() => setDetailId(null)}
         onAssign={(payload) => {
           if (detailId == null || !payload) return;

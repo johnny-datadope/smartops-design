@@ -32,16 +32,28 @@ const IconHeadset = (p) => <Icon {...p} d={<>
   <path d="M21 14v3a2 2 0 0 1-2 2h-2v-7h2a2 2 0 0 1 2 2z"/>
   <path d="M3 14v3a2 2 0 0 0 2 2h2v-7H5a2 2 0 0 0-2 2z"/>
 </>} />;
-const IconSort = (p) => <Icon {...p} d={<>
-  <path d="M8 4v16"/><path d="M5 7l3-3 3 3"/>
-  <path d="M16 20V4"/><path d="M13 17l3 3 3-3"/>
+// Lucide ArrowUpDown / ArrowUp / ArrowDown — Chia SortableTableHead
+const IconArrowUpDown = (p) => <Icon {...p} d={<>
+  <path d="m21 16-4 4-4-4"/><path d="M17 20V4"/>
+  <path d="m3 8 4-4 4 4"/><path d="M7 4v16"/>
 </>} />;
-const IconArrowDown = (p) => <Icon {...p} d={<><path d="M12 5v14"/><path d="m6 13 6 6 6-6"/></>} />;
+const IconArrowUp = (p) => <Icon {...p} d={<>
+  <path d="m5 12 7-7 7 7"/><path d="M12 19V5"/>
+</>} />;
+const IconArrowDown = (p) => <Icon {...p} d={<>
+  <path d="M12 5v14"/><path d="m19 12-7 7-7-7"/>
+</>} />;
 const IconCheck = (p) => <Icon {...p} d="M5 12l5 5L20 7" />;
+// Lucide CheckCircle2 — Chia KPI "Casos resueltos"
+const IconCheckCircle2 = (p) => <Icon {...p} d={<>
+  <circle cx="12" cy="12" r="10"/>
+  <path d="m9 12 2 2 4-4"/>
+</>} />;
 const IconEye = (p) => <Icon {...p} d={<><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></>} />;
 const IconAlert = (p) => <Icon {...p} d={<><path d="M10.3 3.86a2 2 0 0 1 3.4 0l8.2 14.14A2 2 0 0 1 20.2 21H3.8a2 2 0 0 1-1.7-3L10.3 3.86z"/><path d="M12 9v5"/><path d="M12 17.5v.01"/></>} />;
 const IconTriangle = (p) => <Icon {...p} d={'M13.73 4a2 2 0 0 0-3.46 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z'} />;
 const IconChevronDown = (p) => <Icon {...p} d={'m6 9 6 6 6-6'} />;
+const IconHash = (p) => <Icon {...p} d={<><path d="M4 9h16"/><path d="M4 15h16"/><path d="M10 3 8 21"/><path d="m16 3-2 18"/></>} />;
 const IconShieldCheck = (p) => <Icon {...p} d={<>
   <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>
   <path d="m9 12 2 2 4-4"/>
@@ -67,13 +79,20 @@ const IconMaximize = (p) => <Icon {...p} d={<>
   <path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/>
   <path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/>
 </>} />;
+// Lucide ExternalLink — Chia alert-detail header (open full page)
 const IconExternalLink = (p) => <Icon {...p} d={<>
-  <path d="M15 3h6v6"/><path d="M10 14 21 3"/>
-  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h6"/>
+  <path d="M15 3h6v6"/>
+  <path d="M10 14 21 3"/>
+  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
 </>} />;
-const IconMinimize = (p) => <Icon {...p} d={<>
-  <path d="M4 14h6v6"/><path d="M20 10h-6V4"/><path d="M14 10l7-7"/><path d="M3 21l7-7"/>
+// Lucide Minimize2 — Chia alert-detail header (exit full page)
+const IconMinimize2 = (p) => <Icon {...p} d={<>
+  <polyline points="4 14 10 14 10 20"/>
+  <polyline points="20 10 14 10 14 4"/>
+  <line x1="14" y1="10" x2="21" y2="3"/>
+  <line x1="3" y1="21" x2="10" y2="14"/>
 </>} />;
+const IconMinimize = IconMinimize2;
 const IconTerminal = (p) => <Icon {...p} d={<>
   <path d="m4 9 4 3-4 3"/><path d="M12 15h8"/>
   <rect x="2" y="4" width="20" height="16" rx="2"/>
@@ -82,6 +101,11 @@ const IconBriefcase = (p) => <Icon {...p} d={<><path d="M16 20V4a2 2 0 0 0-2-2h-
 const IconMessageSquare = (p) => <Icon {...p} d={<><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></>} />;
 const IconDatabase = (p) => <Icon {...p} d={<><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"/></>} />;
 const IconClock = (p) => <Icon {...p} d={<><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></>} />;
+const IconCalendar = (p) => <Icon {...p} d={<>
+  <path d="M8 2v4"/><path d="M16 2v4"/>
+  <rect width="18" height="18" x="3" y="4" rx="2"/>
+  <path d="M3 10h18"/>
+</>} />;
 const IconUsers = (p) => <Icon {...p} d={<><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></>} />;
 const IconThumbsUp = (p) => <Icon {...p} d={<><path d="M7 10v12"/><path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z"/></>} />;
 const IconThumbsDown = (p) => <Icon {...p} d={<><path d="M17 14V2"/><path d="M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.76a2 2 0 0 0-1.79 1.11L12 22a3.13 3.13 0 0 1-3-3.88Z"/></>} />;
@@ -111,7 +135,26 @@ const IconBrainCircuit = (p) => <Icon {...p} d={<>
   <circle cx="20" cy="8" r=".5" fill="currentColor" stroke="none"/>
 </>} />;
 
-const IconPenLine = (p) => <Icon {...p} d={<><path d="M13 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m18 2 4 4-11 11H7v-4z"/></>} />;
+// Lucide PenLine — Chia case-comments-section header
+const IconPenLine = (p) => <Icon {...p} d={<>
+  <path d="M12 20h9"/>
+  <path d="M16.376 3.622a1 1 0 0 1 3.002 3.002L7.368 18.635a2 2 0 0 1-.855.506l-2.872.838a.5.5 0 0 1-.62-.62l.838-2.872a2 2 0 0 1 .506-.854z"/>
+</>} />;
+
+const IconMoreVertical = (p) => <Icon {...p} d={<>
+  <circle cx="12" cy="5" r="1.5" fill="currentColor" stroke="none"/>
+  <circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/>
+  <circle cx="12" cy="19" r="1.5" fill="currentColor" stroke="none"/>
+</>} sw={0} />;
+
+const IconSun = (p) => <Icon {...p} d={<>
+  <circle cx="12" cy="12" r="4"/>
+  <path d="M12 2v2"/><path d="M12 20v2"/>
+  <path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/>
+  <path d="M2 12h2"/><path d="M20 12h2"/>
+  <path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>
+</>} />;
+const IconMoon = (p) => <Icon {...p} d={<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>} />;
 
 const IconGripVertical = (p) => <Icon {...p} sw={0} fill="currentColor" d={<>
   <circle cx="9" cy="5" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="9" cy="19" r="1"/>
@@ -137,10 +180,10 @@ const IconGoogle = ({ size = 18 }) => (
 // Expose to other files (window + globalThis for Babel standalone script order).
 const ICON_EXPORTS = {
   Icon, IconPulse, IconBell, IconSettings, IconSearch, IconFilter, IconArchive, IconPlus,
-  IconLogout, IconHeadset, IconSort, IconArrowDown, IconCheck, IconEye, IconAlert, IconTriangle, IconChevronDown, IconShieldCheck, IconActivity,
-  IconClose, IconChevron, IconSparkle, IconCopy, IconLink, IconMaximize, IconMinimize, IconExternalLink, IconTerminal,
-  IconBriefcase, IconMessageSquare, IconDatabase, IconClock, IconUsers, IconThumbsUp, IconThumbsDown, IconPenLine, IconGripVertical,
-  IconLifeBuoy, IconRotateCcw, IconFileText, IconShare, IconUser, IconUserX, IconSend, IconBrain, IconBrainCircuit,
+  IconLogout, IconHeadset, IconArrowUpDown, IconArrowUp, IconArrowDown, IconCheck, IconCheckCircle2, IconEye, IconAlert, IconTriangle, IconChevronDown, IconHash, IconShieldCheck, IconActivity,
+  IconClose, IconChevron, IconSparkle, IconCopy, IconLink, IconMaximize, IconMinimize, IconMinimize2, IconExternalLink, IconTerminal,
+  IconBriefcase, IconMessageSquare, IconDatabase, IconClock, IconCalendar, IconUsers, IconThumbsUp, IconThumbsDown, IconPenLine, IconGripVertical,
+  IconLifeBuoy, IconRotateCcw, IconFileText, IconShare, IconUser, IconUserX, IconSend, IconBrain, IconBrainCircuit, IconMoreVertical, IconSun, IconMoon,
   IconInvestigate, IconGoogle,
 };
 Object.assign(window, ICON_EXPORTS);

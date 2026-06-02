@@ -61,6 +61,18 @@ const ALERTS = [
 
 const EVENTS = ALERTS;
 
+// Distinct source values for filter dropdowns (Chia dashboard stats — available_source_*).
+const MOCK_FILTER_STATS = {
+  available_source_clients: ['Acme Corp', 'Globex', 'Initech'],
+  available_source_projects: [
+    'billing', 'billing-api', 'checkout', 'infra', 'observability',
+    'payments', 'platform', 'search',
+  ],
+  available_source_environments: [
+    'development', 'mock-demo', 'production', 'qa', 'staging',
+  ],
+};
+
 const INVESTIGATION_STEPS = [
   { t:'00:00', kind:'start',   text:'Investigation started — pulling alert context' },
   { t:'00:03', kind:'data',    text:'Fetched 6 related alerts in the last 30 min on the same service' },
@@ -71,4 +83,4 @@ const INVESTIGATION_STEPS = [
   { t:'00:22', kind:'action',  text:'Awaiting on-call approval to trigger runbook #R-204' },
 ];
 
-Object.assign(window, { ALERTS, EVENTS, INVESTIGATION_STEPS, alertRow });
+Object.assign(window, { ALERTS, EVENTS, MOCK_FILTER_STATS, INVESTIGATION_STEPS, alertRow });

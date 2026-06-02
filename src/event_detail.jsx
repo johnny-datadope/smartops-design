@@ -5,6 +5,20 @@ const PANEL_RIGHT_DEFAULT = 45;
 const PANEL_RIGHT_MIN = 30;
 const PANEL_RIGHT_MAX = 65;
 
+/** Max textarea height (~20 lines at 13px + leading-relaxed). Update if typography changes. */
+const COMMENT_TEXTAREA_MAX_HEIGHT = 420;
+const COMMENT_TEXTAREA_MIN_HEIGHT = 20;
+const COMMENT_MAX_LENGTH = 3000;
+
+/** AI chat input — mirrors chia AiChatPanel (13px, leading-relaxed, max 8 lines). */
+const CHAT_TEXTAREA_FONT_SIZE_PX = 13;
+const CHAT_TEXTAREA_LINE_HEIGHT = 1.625;
+const CHAT_TEXTAREA_MAX_LINES = 8;
+const CHAT_TEXTAREA_MIN_HEIGHT = 20;
+const CHAT_TEXTAREA_MAX_HEIGHT = Math.ceil(
+  CHAT_TEXTAREA_FONT_SIZE_PX * CHAT_TEXTAREA_LINE_HEIGHT * CHAT_TEXTAREA_MAX_LINES,
+);
+
 function loadStoredRightPct() {
   try {
     const raw = localStorage.getItem(PANEL_RIGHT_PCT_KEY);
@@ -38,6 +52,24 @@ function caseNumberFromEvent(event) {
   if (event.case_id != null) return event.case_id;
   if (event.case && event.case !== '—') return String(event.case).replace('#', '');
   return null;
+}
+
+/** Session display for comment authors — same mock identities as TopBar. */
+function sessionCommentAuthor(currentUser) {
+  const isAdmin = currentUser?.role === 'Admin';
+  if (isAdmin) {
+    return { name: 'Daniel Dorado', initials: 'DD' };
+  }
+  return { name: 'Francisca Molina', initials: 'FM' };
+}
+
+function commentInitials(name, fallback = '?') {
+  const source = (name && name.trim()) || fallback;
+  if (!source) return '?';
+  const parts = source.split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '?';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
 function eventHasCase(event) {
@@ -81,7 +113,36 @@ function ModalAlertStatusBadge({ alertStatus, status }) {
   const { t } = useI18n();
   const key = resolveAlertStatusKey(alertStatus, status);
   const label = (t.alertStatus && t.alertStatus[key]) || key;
-  return <span className="modal-status-badge">{label}</span>;
+  return <span className={modalAlertStatusBadgeClass()}>{label}</span>;
+}
+
+function StageNode({ isCompleted, isActive }) {
+  return (
+    <div className={'investigation-stages__node' + (isCompleted ? ' is-done' : isActive ? ' is-active' : '')}>
+      {isCompleted ? <IconCheck size={14} sw={2.5}/> : isActive ? <span className="investigation-stages__dot"/> : null}
+    </div>
+  );
+}
+
+function InvestigationStageDetails({ stageData, isCompleted, isActive, nowIso, t }) {
+  if (!stageData?.started_at) {
+    return <span className="investigation-stages__dash">—</span>;
+  }
+  const tone = isCompleted ? 'is-done' : isActive ? 'is-active' : '';
+  const duration = formatDuration(stageData.started_at, stageData.finished_at || nowIso);
+  return (
+    <>
+      <span className={'investigation-stages__start ' + tone}>
+        {t.alertDetail.stageStart} {formatTimestamp(stageData.started_at)}
+      </span>
+      {stageData.finished_at && (
+        <span className={'investigation-stages__end ' + tone}>
+          {t.alertDetail.stageEnd} {formatTimestamp(stageData.finished_at)}
+        </span>
+      )}
+      <span className={'investigation-stages__duration ' + (isCompleted ? 'is-done' : '')}>{duration}</span>
+    </>
+  );
 }
 
 function InvestigationStagesTimeline({ stages, t }) {
@@ -92,51 +153,112 @@ function InvestigationStagesTimeline({ stages, t }) {
   }, []);
 
   const keys = ['triage', 'post_mortem', 'closed'];
+  const nowIso = now.toISOString();
+
+  const renderStage = (key, index, layout) => {
+    const stageData = stages[key];
+    const isCompleted = stageData?.finished_at != null;
+    const isActive = stages.current_stage === key;
+    const isLast = index === keys.length - 1;
+    const titleClass = 'investigation-stages__title'
+      + (isActive ? ' is-active' : isCompleted ? ' is-done' : '');
+
+    if (layout === 'compact') {
+      return (
+        <div key={key} className="investigation-stages__v-item">
+          <div className="investigation-stages__v-rail">
+            <StageNode isCompleted={isCompleted} isActive={isActive}/>
+            {!isLast && <div className={'investigation-stages__v-line' + (isCompleted ? ' is-done' : '')}/>}
+          </div>
+          <div className="investigation-stages__v-body">
+            <div className="investigation-stages__v-head">
+              <span className={titleClass}>{t.investigationStage[key]}</span>
+              {stageData?.started_at && (
+                <span className={'investigation-stages__duration ' + (isCompleted ? 'is-done' : isActive ? '' : '')}>
+                  {formatDuration(stageData.started_at, stageData.finished_at || nowIso)}
+                </span>
+              )}
+            </div>
+            <InvestigationStageDetails stageData={stageData} isCompleted={isCompleted} isActive={isActive} nowIso={nowIso} t={t}/>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div key={key} className={'investigation-stages__item' + (isLast ? ' investigation-stages__item--last' : '')}>
+        <div className="investigation-stages__stage">
+          <StageNode isCompleted={isCompleted} isActive={isActive}/>
+          <div className="investigation-stages__label">
+            <span className={titleClass}>{t.investigationStage[key]}</span>
+            <InvestigationStageDetails stageData={stageData} isCompleted={isCompleted} isActive={isActive} nowIso={nowIso} t={t}/>
+          </div>
+        </div>
+        {!isLast && <div className={'investigation-stages__connector' + (isCompleted ? ' is-done' : '')}/>}
+      </div>
+    );
+  };
+
   return (
     <div className="investigation-stages">
-      <div className="investigation-stages__row">
-        {keys.map((key, index) => {
-          const stageData = stages[key];
-          const isCompleted = stageData?.finished_at != null;
-          const isActive = stages.current_stage === key;
-          const isLast = index === keys.length - 1;
-          const endIso = stageData?.finished_at || (isActive ? now.toISOString() : null);
-          const duration = stageData?.started_at && endIso
-            ? formatDuration(stageData.started_at, endIso)
-            : '';
-          return (
-            <div key={key} className="investigation-stages__item">
-              <div className="investigation-stages__stage">
-                <div className={'investigation-stages__node' + (isCompleted ? ' is-done' : isActive ? ' is-active' : '')}>
-                  {isCompleted ? <IconCheck size={14}/> : isActive ? <span className="investigation-stages__dot"/> : null}
-                </div>
-                <div className="investigation-stages__label">
-                  <span className={'investigation-stages__title' + (isActive ? ' is-active' : isCompleted ? ' is-done' : '')}>
-                    {t.investigationStage[key]}
-                  </span>
-                  {stageData?.started_at ? (
-                    <>
-                      <span className={'investigation-stages__duration' + (isCompleted ? ' is-done' : '')}>{duration}</span>
-                      <span className="investigation-stages__meta">
-                        {formatTimestamp(stageData.started_at)}
-                        {stageData.finished_at ? ` → ${formatTimestamp(stageData.finished_at)}` : ''}
-                      </span>
-                    </>
-                  ) : (
-                    <span className="investigation-stages__meta">—</span>
-                  )}
-                </div>
-              </div>
-              {!isLast && <div className={'investigation-stages__connector' + (isCompleted ? ' is-done' : '')}/>}
-            </div>
-          );
-        })}
+      <div className="investigation-stages--compact">
+        <div className="investigation-stages__vertical">
+          {keys.map((key, index) => renderStage(key, index, 'compact'))}
+        </div>
+      </div>
+      <div className="investigation-stages__row investigation-stages__row--wide">
+        {keys.map((key, index) => renderStage(key, index, 'wide'))}
       </div>
     </div>
   );
 }
 
-function EventDetail({ event, onClose, onInvestigate, onAssign }) {
+function AlertModalHeader({
+  event, severityKey, onClose, isMaximized, onToggleMaximize, showActions,
+}) {
+  const { t } = useI18n();
+  const namespace = event.namespace || event.scope || 'default';
+  return (
+    <div className="modal-alert-header">
+      <div className="modal-alert-header__main">
+        <div className="modal-alert-header__badges">
+          <span className={modalSeverityBadgeClass(event.severity, event.sev)}>{severityKey}</span>
+          <ModalAlertStatusBadge alertStatus={event.alert_status} status={event.status}/>
+        </div>
+        <h1 className="modal-alert-header__title">{event.title}</h1>
+        <p className="modal-alert-header__meta">
+          <span>{event.service}</span>
+          <span className="modal-alert-header__meta-sep">·</span>
+          <span>{namespace}</span>
+          <span className="modal-alert-header__meta-sep">·</span>
+          <span>{formatTimestamp(event.at)}</span>
+        </p>
+      </div>
+      {showActions && (
+        <div className="modal-alert-header__actions">
+          <button
+            type="button"
+            className="modal-alert-header__action-btn"
+            onClick={onToggleMaximize}
+            aria-label={isMaximized ? t.common.back : t.alertDetail.openFullPage}
+          >
+            {isMaximized ? <IconMinimize2 size={16}/> : <IconExternalLink size={16}/>}
+          </button>
+          <button
+            type="button"
+            className="modal-alert-header__action-btn"
+            onClick={onClose}
+            aria-label={t.common.close}
+          >
+            <IconClose size={16}/>
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function EventDetail({ event, onClose, onInvestigate, onAssign, currentUser, alertId }) {
   const { t } = useI18n();
   const [tab, setTab] = React.useState('overview');
   const [comment, setComment] = React.useState('');
@@ -155,21 +277,23 @@ function EventDetail({ event, onClose, onInvestigate, onAssign }) {
 
   const submitComment = () => {
     const text = comment.trim();
-    if (!text) return;
+    if (!text || text.length > COMMENT_MAX_LENGTH) return;
     const now = new Date();
-    const at = now.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true });
-    const palette = [
-      'linear-gradient(135deg, oklch(0.55 0.12 200), oklch(0.45 0.12 260))',
-      'linear-gradient(135deg, oklch(0.55 0.18 330), oklch(0.45 0.16 290))',
-      'linear-gradient(135deg, oklch(0.60 0.14 150), oklch(0.50 0.14 200))',
-      'linear-gradient(135deg, oklch(0.58 0.16 30),  oklch(0.50 0.15 350))',
-    ];
+    const at = now.toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    });
+    const author = sessionCommentAuthor(currentUser);
     setComments(cs => [...cs, {
+      id: `c-${Date.now()}-${cs.length}`,
       text,
-      user: 'admin',
-      initials: 'AD',
+      author: author.name,
+      initials: commentInitials(author.name),
       at,
-      avatarBg: palette[cs.length % palette.length],
     }]);
     setComment('');
   };
@@ -195,6 +319,7 @@ function EventDetail({ event, onClose, onInvestigate, onAssign }) {
   const [turns, setTurns] = React.useState(initialTurns);
   const [busy, setBusy] = React.useState(false);
   const scrollRef = React.useRef(null);
+  const alertSupportUrl = useAlertHelpdeskUrl(event, alertId, currentUser, turns);
 
   // Autoscroll the reasoning pane whenever turns change.
   React.useEffect(() => {
@@ -202,8 +327,16 @@ function EventDetail({ event, onClose, onInvestigate, onAssign }) {
     if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
   }, [turns]);
 
+  const rcaHasBeenGenerated = turns.some(t => t.kind === 'analysis');
+
+  const handleFeedback = (type) => {
+    if (!rcaHasBeenGenerated) return;
+    setFeedback(type);
+  };
+
   const runReinvestigate = () => {
     if (busy) return;
+    setFeedback('PENDING_REVIEW');
     setBusy(true);
     const rid = 'r' + Date.now();
     // Push a new reasoning turn with empty steps, then stream-in each step.
@@ -291,13 +424,16 @@ function EventDetail({ event, onClose, onInvestigate, onAssign }) {
   if (!event) return null;
 
   const hasCase = eventHasCase(event);
-  const namespace = event.namespace || event.scope || 'default';
-  const metaLine = [event.service, namespace, formatTimestamp(event.at)].filter(Boolean).join(' · ');
   const severityKey = resolveSeverityKey(event.severity, event.sev);
+  const investigationStages = hasCase ? mockInvestigationStages(event) : null;
   const tabs = [
-    { id: 'overview', label: t.alertDetail.overview },
-    { id: 'activity', label: t.alertDetail.activity },
-    { id: 'info', label: t.alertDetail.additionalInfo },
+    { id: 'overview', label: t.alertDetail.overview, shortLabel: t.alertDetail.overview },
+    { id: 'activity', label: t.alertDetail.activity, shortLabel: t.alertDetail.activity },
+    {
+      id: 'info',
+      label: t.alertDetail.additionalInfo,
+      shortLabel: t.alertDetail.additionalInfoShort,
+    },
   ];
 
   const startResize = (e) => {
@@ -326,39 +462,36 @@ function EventDetail({ event, onClose, onInvestigate, onAssign }) {
 
   const leftPanel = (
     <div style={{ display:'flex', flexDirection:'column', minWidth:0, minHeight:0, overflow:'hidden', height:'100%' }}>
-      <div style={{ padding:'18px 22px', borderBottom:'1px solid var(--line)' }}>
-        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            <span className={modalSeverityBadgeClass(event.severity, event.sev)}>{severityKey}</span>
-            <ModalAlertStatusBadge alertStatus={event.alert_status} status={event.status}/>
-          </div>
-          {!isMobile && (
-            <div style={{ display:'flex', gap:6 }}>
-              <button type="button" className="btn btn--ghost btn--icon" onClick={() => setIsMaximized(m => !m)} title={isMaximized ? t.common.back : t.alertDetail.openFullPage}>
-                {isMaximized ? <IconMinimize size={14}/> : <IconExternalLink size={14}/>}
-              </button>
-              <button type="button" className="btn btn--ghost btn--icon" onClick={onClose} title={t.common.close}><IconClose size={14}/></button>
-            </div>
-          )}
+      <div className="modal-left-fixed">
+        <AlertModalHeader
+          event={event}
+          severityKey={severityKey}
+          onClose={onClose}
+          isMaximized={isMaximized}
+          onToggleMaximize={() => setIsMaximized(m => !m)}
+          showActions={!isMobile}
+        />
+
+        {investigationStages && (
+          <InvestigationStagesTimeline stages={investigationStages} t={t}/>
+        )}
+
+        <div className="modal-detail-tabs">
+          {tabs.map(item => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => setTab(item.id)}
+              className={'detail-tab' + (tab === item.id ? ' is-active' : '')}
+            >
+              <span className="detail-tab__short">{item.shortLabel}</span>
+              <span className="detail-tab__long">{item.label}</span>
+            </button>
+          ))}
         </div>
-        <div style={{ fontSize:'1.375rem', fontWeight:600, letterSpacing:'-0.015em' }}>{event.title}</div>
-        <div style={{ fontSize: '0.8125rem', color: 'var(--muted-foreground)', marginTop: 4 }}>{metaLine}</div>
       </div>
 
-      <div style={{ padding:'12px 22px 0', borderBottom:'1px solid var(--line)' }}>
-        <InvestigationStagesTimeline stages={mockInvestigationStages(event)} t={t}/>
-      </div>
-
-      <div style={{ display:'flex', gap:2, padding:'0 22px', borderBottom:'1px solid var(--line)' }}>
-        {tabs.map(item => (
-          <button key={item.id} onClick={() => setTab(item.id)}
-            className={'detail-tab' + (tab === item.id ? ' is-active' : '')}>
-            {item.label}
-          </button>
-        ))}
-      </div>
-
-      <div style={{ flex:1, overflowY:'auto', padding:'18px 22px' }}>
+      <div style={{ flex:1, overflowY:'auto', padding:'1.125rem 1.25rem', minHeight:0 }}>
         {tab === 'overview' && (
           <OverviewPane
             event={event}
@@ -390,11 +523,13 @@ function EventDetail({ event, onClose, onInvestigate, onAssign }) {
         <>
           <ChatPanelHeader
             t={t}
-            feedback={feedback}
-            setFeedback={setFeedback}
+            feedbackValue={feedback}
+            onFeedback={handleFeedback}
+            feedbackEnabled={rcaHasBeenGenerated}
             shareOpen={shareOpen}
             setShareOpen={setShareOpen}
             copied={copied}
+            alertSupportUrl={alertSupportUrl}
             onCopyChat={() => {
               navigator.clipboard.writeText(JSON.stringify(turns, null, 2));
               setCopied(true);
@@ -402,32 +537,30 @@ function EventDetail({ event, onClose, onInvestigate, onAssign }) {
             }}
           />
           <div ref={scrollRef} className="chat-panel__scroll">
-            {turns.map((turn) => (
-              <ThreadTurn key={turn.id} turn={turn} t={t} onToggle={() => {
-                setTurns(ts => ts.map(item => item.id === turn.id ? { ...item, open: !item.open } : item));
-              }}/>
-            ))}
+            <div className="chat-panel__thread">
+              {turns.map((turn) => (
+                <ThreadTurn key={turn.id} turn={turn} t={t} onToggle={() => {
+                  setTurns(ts => ts.map(item => item.id === turn.id ? { ...item, open: !item.open } : item));
+                }}/>
+              ))}
+            </div>
           </div>
           <div className="chat-panel__footer">
-            <button onClick={runReinvestigate} disabled={busy} className="chat-footer-btn">
-              <IconRotateCcw size={13}/> {t.chat.reinvestigate}
+            <button type="button" onClick={runReinvestigate} disabled={busy} className="chat-footer-btn">
+              <IconRotateCcw size={14}/> {t.chat.reinvestigate}
             </button>
-            <button onClick={runPostmortem} disabled={busy} className="chat-footer-btn">
-              <IconFileText size={13}/> {t.chat.postMortem}
+            <button type="button" onClick={runPostmortem} disabled={busy} className="chat-footer-btn">
+              <IconFileText size={14}/> {t.chat.postMortem}
             </button>
           </div>
           <div className="chat-panel__input">
-            <div className="chat-input-wrap">
-              <input
-                value={aiInput}
-                onChange={e => setAiInput(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') sendMessage(); }}
-                placeholder={t.chat.askPlaceholder}
-              />
-              <button type="button" className="chat-send-btn" onClick={sendMessage}>
-                <IconSend size={13}/>
-              </button>
-            </div>
+            <ChatAgentInput
+              t={t}
+              value={aiInput}
+              onChange={setAiInput}
+              onSend={sendMessage}
+              disabled={busy}
+            />
           </div>
         </>
       ) : (
@@ -466,7 +599,7 @@ function EventDetail({ event, onClose, onInvestigate, onAssign }) {
       className={'modal-dialog modal-dialog--split' + (isMaximized ? ' is-maximized' : '')}
       onClick={e => e.stopPropagation()}
     >
-      <div className="modal-split__left" style={{ width: `calc(${100 - rightPct}% - 3px)` }}>
+      <div className="modal-split__left" style={{ width: `calc(${100 - rightPct}% - 0.5px)` }}>
         {leftPanel}
       </div>
       <div
@@ -475,10 +608,13 @@ function EventDetail({ event, onClose, onInvestigate, onAssign }) {
         role="separator"
         aria-orientation="vertical"
         aria-label="Resize panels"
+        tabIndex={0}
       >
-        <span className="panel-resize-handle__grip"><IconGripVertical size={10}/></span>
+        <span className="panel-resize-handle__grip" aria-hidden="true">
+          <IconGripVertical size={10}/>
+        </span>
       </div>
-      <div className="modal-split__right" style={{ width: `calc(${rightPct}% - 3px)` }}>
+      <div className="modal-split__right" style={{ width: `calc(${rightPct}% - 0.5px)` }}>
         {rightPanel}
       </div>
     </div>
@@ -519,8 +655,10 @@ function CaseManagementHeader({ event, hasCase, t, assignOpen, setAssignOpen, on
   const [actionsOpen, setActionsOpen] = React.useState(false);
   const list = currentAssignees(event);
   const caseNum = caseNumberFromEvent(event);
+  const cannotUnassignLast = hasCase && list.length <= 1;
 
   const unassignOne = (initials) => {
+    if (cannotUnassignLast) return;
     const u = list.find(a => a.initials === initials);
     if (u && onAssign) onAssign({ toggle: u });
   };
@@ -528,95 +666,172 @@ function CaseManagementHeader({ event, hasCase, t, assignOpen, setAssignOpen, on
   return (
     <div className="case-mgmt">
       <div className="case-mgmt__top">
-        <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-          <div style={{
-            width:24, height:24, borderRadius:6,
-            background:'color-mix(in oklch, var(--primary) 15%, transparent)',
-            color:'var(--primary)', display:'flex', alignItems:'center', justifyContent:'center',
-          }}>
+        <div className="case-mgmt__title">
+          <div className="case-mgmt__title-icon" aria-hidden="true">
             <IconBriefcase size={14}/>
           </div>
-          <span style={{ fontSize:14, fontWeight:600 }}>
+          <span className="case-mgmt__title-text">
             {hasCase && caseNum != null ? `${t.cases.title} #${caseNum}` : t.cases.title}
           </span>
         </div>
-        {hasCase && (
+        {hasCase ? (
           <div className="case-mgmt__status-col">
             <CaseStatusBadge status={event.caseStatus} caseStatus={event.case_status}/>
             <div style={{ position:'relative' }}>
-              <button onClick={() => setActionsOpen(o => !o)} style={{
-                fontSize:11, color:'var(--foreground)', display:'inline-flex', alignItems:'center', gap:4,
-                padding:'4px 8px', borderRadius:6, border:'1px solid var(--border)', background:'transparent', height:24,
-              }}>
+              <button
+                type="button"
+                className="case-actions-btn"
+                onClick={() => setActionsOpen(o => !o)}
+                aria-expanded={actionsOpen}
+              >
                 <IconChevronDown size={12}/> {t.cases.actions}
               </button>
               {actionsOpen && (
                 <>
                   <div onClick={() => setActionsOpen(false)} style={{ position:'fixed', inset:0, zIndex:1 }}/>
-                  <div style={{
-                    position:'absolute', top:'calc(100% + 4px)', right:0, zIndex:2,
-                    minWidth:160, background:'var(--bg)', border:'1px solid var(--line-2)',
-                    borderRadius:8, boxShadow:'0 12px 24px -6px rgba(0,0,0,0.35)', padding:4,
-                  }}>
-                    <button style={menuItemStyle} onClick={() => setActionsOpen(false)}>{t.cases.closeCase}</button>
+                  <div className="dropdown-menu" role="menu">
+                    <button
+                      type="button"
+                      className="dropdown-menu__item"
+                      role="menuitem"
+                      onClick={() => setActionsOpen(false)}
+                    >
+                      <span className="dropdown-menu__item-icon" aria-hidden="true">
+                        <IconCheckCircle2 size={14}/>
+                      </span>
+                      {t.cases.closeCase}
+                    </button>
                   </div>
                 </>
               )}
             </div>
           </div>
+        ) : (
+          <span className="case-mgmt__unassigned">{t.cases.noCaseOpened}</span>
         )}
       </div>
+
       {hasCase && (
         <div className="case-mgmt__assignees">
-          <IconUsers size={12} style={{ color:'var(--muted-foreground)', flexShrink:0, marginTop:2 }}/>
-          {list.length === 0 && (
-            <span style={{ fontSize:11, color:'var(--muted-foreground)' }}>{t.cases.noOneAssigned}</span>
-          )}
-          {list.map(a => (
-            <span key={a.initials} className="assignee-chip">
-              <span className="avatar" style={{ width:16, height:16, fontSize:8, marginLeft:0 }}>{a.initials}</span>
-              <span style={{ fontSize:11 }}>{a.name || a.initials}</span>
-              <button type="button" onClick={() => unassignOne(a.initials)} aria-label={t.alerts.unassignAll}>
-                <IconClose size={10}/>
-              </button>
-            </span>
-          ))}
-          <div style={{ position:'relative' }}>
-            <button onClick={() => setAssignOpen(o => !o)} className="assign-to-btn">
-              <IconPlus size={11}/> {t.alerts.assignTo}
-            </button>
-            {assignOpen && (
-              <>
-                <div onClick={() => setAssignOpen(false)} style={{ position:'fixed', inset:0, zIndex:1 }}/>
-                <div style={{
-                  position:'absolute', top:'calc(100% + 6px)', left:0, zIndex:2,
-                  width:280, maxHeight:360,
-                  background:'var(--bg)', border:'1px solid var(--line-2)',
-                  borderRadius:10, boxShadow:'0 20px 40px -8px rgba(0,0,0,0.5)',
-                  display:'flex', flexDirection:'column', overflow:'hidden',
-                }}>
-                  <AssigneePickerBody
-                    assigned={list}
-                    hasCase={hasCase}
-                    onToggle={u => onAssign && onAssign({ toggle: u })}
-                  />
-                </div>
-              </>
+          <span className="case-mgmt__users-icon" aria-hidden="true">
+            <IconUsers size={12}/>
+          </span>
+          <div className="case-mgmt__assignee-list">
+            {list.length > 0 ? (
+              list.map(a => {
+                const displayName = a.name || a.initials;
+                const initials = String(a.initials || displayName).slice(0, 2).toUpperCase();
+                return (
+                  <div key={a.initials} className="assignee-chip">
+                    <span className="assignee-chip__avatar">{initials}</span>
+                    <span className="assignee-chip__name">{displayName}</span>
+                    {onAssign && !cannotUnassignLast && (
+                      <button
+                        type="button"
+                        className="assignee-chip__remove"
+                        onClick={() => unassignOne(a.initials)}
+                        aria-label={displayName}
+                      >
+                        <IconClose size={12}/>
+                      </button>
+                    )}
+                  </div>
+                );
+              })
+            ) : (
+              <span className="case-mgmt__unassigned">{t.cases.noOneAssigned}</span>
             )}
           </div>
+          {onAssign && (
+            <div style={{ position:'relative' }}>
+              <button
+                type="button"
+                className="assign-to-btn"
+                onClick={() => setAssignOpen(o => !o)}
+                aria-expanded={assignOpen}
+              >
+                <IconPlus size={12}/> {t.alerts.assignTo}
+              </button>
+              {assignOpen && (
+                <>
+                  <div onClick={() => setAssignOpen(false)} style={{ position:'fixed', inset:0, zIndex:1 }}/>
+                  <div className="case-assign-popover">
+                    <AssigneePickerBody
+                      assigned={list}
+                      hasCase={hasCase}
+                      onToggle={u => onAssign({ toggle: u })}
+                    />
+                  </div>
+                </>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>
   );
 }
 
-const menuItemStyle = {
-  width:'100%', display:'flex', alignItems:'center', gap:8,
-  padding:'8px 10px', borderRadius:6, fontSize:12,
-  color:'var(--fg)', background:'transparent', border:0, cursor:'pointer', textAlign:'left',
-};
+function SimpleTooltip({ content, children }) {
+  const tipId = React.useId();
+  return (
+    <span className="simple-tooltip">
+      <span className="simple-tooltip__trigger" aria-describedby={tipId}>
+        {children}
+      </span>
+      <span className="simple-tooltip__content" id={tipId} role="tooltip">
+        {content}
+      </span>
+    </span>
+  );
+}
 
-function ChatPanelHeader({ t, feedback, setFeedback, shareOpen, setShareOpen, copied, onCopyChat }) {
+function ChatPanelHeader({
+  t,
+  feedbackValue,
+  onFeedback,
+  feedbackEnabled,
+  shareOpen,
+  setShareOpen,
+  copied,
+  onCopyChat,
+  alertSupportUrl,
+}) {
+  const [shouldFeedbackGlow, setShouldFeedbackGlow] = React.useState(false);
+
+  const hasFeedback = feedbackValue === 'ACCEPTED'
+    || feedbackValue === 'REJECTED'
+    || feedbackValue === 'PENDING_REVIEW';
+
+  React.useEffect(() => {
+    if (feedbackEnabled && !hasFeedback) {
+      setShouldFeedbackGlow(true);
+      const timer = setTimeout(() => setShouldFeedbackGlow(false), 2000);
+      return () => clearTimeout(timer);
+    }
+    if (hasFeedback) setShouldFeedbackGlow(false);
+    return undefined;
+  }, [feedbackEnabled, hasFeedback]);
+
+  const helpfulTip = feedbackEnabled ? t.chat.helpful : t.chat.feedbackDisabled;
+  const notHelpfulTip = feedbackEnabled ? t.chat.notHelpful : t.chat.feedbackDisabled;
+
+  const helpfulClass = [
+    'chat-feedback-btn',
+    'chat-feedback-btn--up',
+    !feedbackEnabled && 'is-disabled',
+    shouldFeedbackGlow && feedbackEnabled && 'is-glow',
+    feedbackValue === 'ACCEPTED' && 'is-active',
+  ].filter(Boolean).join(' ');
+
+  const notHelpfulClass = [
+    'chat-feedback-btn',
+    'chat-feedback-btn--down',
+    !feedbackEnabled && 'is-disabled',
+    shouldFeedbackGlow && feedbackEnabled && 'is-glow',
+    feedbackValue === 'REJECTED' && 'is-active',
+  ].filter(Boolean).join(' ');
+
   return (
     <div className="chat-panel-header">
       <div className="chat-panel-header__icon">
@@ -627,39 +842,65 @@ function ChatPanelHeader({ t, feedback, setFeedback, shareOpen, setShareOpen, co
         <h3>{t.chat.aiAssistant}</h3>
       </div>
       <div className="chat-panel-header__actions">
-        <button type="button" className="chat-icon-btn" title={t.support.openAlertTicket} aria-label={t.support.openAlertTicket}>
-          <IconLifeBuoy size={14}/>
-        </button>
-        <button
-          type="button"
-          className={'chat-icon-btn' + (feedback === 'up' ? ' is-active' : '')}
-          aria-label={t.chat.helpful}
-          onClick={() => setFeedback(f => f === 'up' ? null : 'up')}
-        >
-          <IconThumbsUp size={14}/>
-        </button>
-        <button
-          type="button"
-          className={'chat-icon-btn' + (feedback === 'down' ? ' is-danger-active' : '')}
-          aria-label={t.chat.notHelpful}
-          onClick={() => setFeedback(f => f === 'down' ? null : 'down')}
-        >
-          <IconThumbsDown size={14}/>
-        </button>
-        <div style={{ position:'relative' }}>
-          <button type="button" className="chat-share-btn" onClick={() => setShareOpen(o => !o)} aria-label={t.rca.share}>
-            <IconShare size={14}/> <span>{t.rca.share}</span>
+        {alertSupportUrl ? (
+          <a
+            href={alertSupportUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="chat-support-link"
+            title={t.support.openAlertTicket}
+            aria-label={t.support.openAlertTicket}
+          >
+            <IconLifeBuoy size={14}/>
+          </a>
+        ) : null}
+        <SimpleTooltip content={helpfulTip}>
+          <button
+            type="button"
+            className={helpfulClass}
+            aria-label={t.chat.helpful}
+            disabled={!feedbackEnabled}
+            onClick={() => onFeedback('ACCEPTED')}
+          >
+            <IconThumbsUp size={14}/>
+          </button>
+        </SimpleTooltip>
+        <SimpleTooltip content={notHelpfulTip}>
+          <button
+            type="button"
+            className={notHelpfulClass}
+            aria-label={t.chat.notHelpful}
+            disabled={!feedbackEnabled}
+            onClick={() => onFeedback('REJECTED')}
+          >
+            <IconThumbsDown size={14}/>
+          </button>
+        </SimpleTooltip>
+        <div className="chat-share-wrap">
+          <button
+            type="button"
+            className="chat-share-btn"
+            onClick={() => setShareOpen(o => !o)}
+            aria-label={t.rca.share}
+            aria-expanded={shareOpen}
+          >
+            <IconShare size={14}/>
+            <span>{t.rca.share}</span>
           </button>
           {shareOpen && (
             <>
-              <div onClick={() => setShareOpen(false)} style={{ position:'fixed', inset:0, zIndex:1 }}/>
-              <div style={{
-                position:'absolute', top:'calc(100% + 4px)', right:0, zIndex:2,
-                minWidth:180, background:'var(--bg)', border:'1px solid var(--line-2)',
-                borderRadius:10, boxShadow:'0 12px 24px -6px rgba(0,0,0,0.35)', padding:4, overflow:'hidden',
-              }}>
-                <button style={menuItemStyle} onClick={() => { onCopyChat(); setShareOpen(false); }}>
-                  {copied ? <IconCheck size={12}/> : <IconCopy size={12}/>}
+              <div className="chat-share-backdrop" onClick={() => setShareOpen(false)} aria-hidden="true"/>
+              <div className="chat-share-menu" role="menu">
+                <p className="chat-share-menu__label">{t.rca.share}</p>
+                <button
+                  type="button"
+                  className={'chat-share-menu__item' + (copied ? ' is-copied' : '')}
+                  role="menuitem"
+                  onClick={() => { onCopyChat(); setShareOpen(false); }}
+                >
+                  <span className="chat-share-menu__item-icon" aria-hidden="true">
+                    {copied ? <IconCheck size={16}/> : <IconCopy size={16}/>}
+                  </span>
                   {copied ? t.rca.copied : t.chat.copyFullChat}
                 </button>
               </div>
@@ -742,69 +983,164 @@ function OverviewPane({ event, t, comments, comment, setComment, submitComment }
   );
 }
 
-function CommentsSection({ t, comments, comment, setComment, submitComment }) {
+function ChatAgentInput({ t, value, onChange, onSend, disabled }) {
+  const textareaRef = React.useRef(null);
+  const [editorHeight, setEditorHeight] = React.useState(CHAT_TEXTAREA_MIN_HEIGHT);
+
+  const autoResizeTextarea = React.useCallback(() => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    ta.style.height = 'auto';
+    const contentHeight = Math.max(ta.scrollHeight, CHAT_TEXTAREA_MIN_HEIGHT);
+    ta.style.height = `${contentHeight}px`;
+    setEditorHeight(Math.min(contentHeight, CHAT_TEXTAREA_MAX_HEIGHT));
+  }, []);
+
+  React.useLayoutEffect(() => {
+    autoResizeTextarea();
+  }, [value, autoResizeTextarea]);
+
+  const canSend = value.trim().length > 0 && !disabled;
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      if (canSend) onSend();
+    }
+  };
+
   return (
-    <div className="card" style={{ padding:16 }}>
-      <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:16 }}>
-        <div style={{
-          width:24, height:24, borderRadius:6,
-          background:'color-mix(in oklch, var(--primary) 15%, transparent)',
-          color:'var(--primary)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0,
-        }}>
-          <IconPenLine size={14}/>
-        </div>
-        <h3 style={{ fontSize:'0.875rem', fontWeight:600, margin:0, flex:1 }}>{t.cases.caseComments}</h3>
-        <span style={{ fontSize:11, color:'var(--muted-foreground)' }}>
-          {comments.length} {comments.length === 1 ? t.cases.comment : t.cases.comments}
-        </span>
-      </div>
-      <div style={{ marginLeft:32 }}>
-        {comments.length > 0 && (
-          <div style={{ display:'flex', flexDirection:'column', gap:10, marginBottom:10 }}>
-            {comments.map((c, i) => (
-              <div key={i} style={{ display:'flex', gap:10, alignItems:'flex-start' }}>
-                <div style={{
-                  width:26, height:26, borderRadius:99, flexShrink:0,
-                  background: c.avatarBg,
-                  color:'#fff', fontSize:10.5, fontWeight:600,
-                  display:'flex', alignItems:'center', justifyContent:'center',
-                }}>{c.initials}</div>
-                <div style={{ minWidth:0, flex:1 }}>
-                  <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:2 }}>
-                    <span style={{ fontSize:12.5, fontWeight:600 }}>{c.user}</span>
-                    <span style={{ fontSize:11, color:'var(--fg-4)' }}>{c.at}</span>
-                  </div>
-                  <div style={{ fontSize:12.5, color:'var(--accent)', wordBreak:'break-word' }}>{c.text}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-        <div className="comment-composer">
-          <input
-            value={comment}
-            onChange={e => setComment(e.target.value)}
-            onKeyDown={e => {
-              if (e.key === 'Enter' && !e.shiftKey && comment.trim()) {
-                e.preventDefault();
-                submitComment();
-              }
-            }}
-            placeholder={t.alertDetail.addComment}
+    <div className={'comment-composer' + (disabled ? ' is-disabled' : '')}>
+      <div
+        className="comment-composer__scroll"
+        data-slot="scroll-area"
+        style={{ height: editorHeight }}
+      >
+        <div className="comment-composer__scroll-viewport" data-slot="scroll-area-viewport">
+          <textarea
+            ref={textareaRef}
+            className="comment-composer__textarea comment-composer__textarea--chat"
+            value={value}
+            onChange={e => onChange(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder={t.chat.askPlaceholder}
+            rows={1}
+            disabled={disabled}
+            aria-label={t.chat.askPlaceholder}
           />
-          <button type="button" onClick={submitComment} disabled={!comment.trim() || comment.length > COMMENT_MAX_LENGTH}>
-            <IconSend size={13}/>
-          </button>
         </div>
-        <p className="comment-counter" style={{ color: comment.length > COMMENT_MAX_LENGTH ? 'var(--destructive)' : 'var(--muted-foreground)' }}>
-          {comment.length}/{COMMENT_MAX_LENGTH}
-        </p>
       </div>
+      <button
+        type="button"
+        className="comment-composer__send"
+        onClick={onSend}
+        disabled={!canSend}
+        aria-label={t.chat.sendMessage}
+      >
+        <IconSend size={14}/>
+      </button>
     </div>
   );
 }
 
-const COMMENT_MAX_LENGTH = 3000;
+function CommentsSection({ t, comments, comment, setComment, submitComment }) {
+  const textareaRef = React.useRef(null);
+  const [editorHeight, setEditorHeight] = React.useState(COMMENT_TEXTAREA_MIN_HEIGHT);
+
+  const autoResizeTextarea = React.useCallback(() => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    ta.style.height = 'auto';
+    const contentHeight = Math.max(ta.scrollHeight, COMMENT_TEXTAREA_MIN_HEIGHT);
+    ta.style.height = `${contentHeight}px`;
+    setEditorHeight(Math.min(contentHeight, COMMENT_TEXTAREA_MAX_HEIGHT));
+  }, []);
+
+  React.useLayoutEffect(() => {
+    autoResizeTextarea();
+  }, [comment, autoResizeTextarea]);
+
+  const isOverCommentLimit = comment.length > COMMENT_MAX_LENGTH;
+  const canSendComment = comment.trim().length > 0 && !isOverCommentLimit;
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      if (canSendComment) submitComment();
+    }
+  };
+
+  return (
+    <div className="case-comments">
+      <div className="case-comments__header">
+        <div className="case-comments__icon">
+          <IconPenLine size={14}/>
+        </div>
+        <h3 className="case-comments__title">{t.cases.caseComments}</h3>
+        <span className="case-comments__count">
+          {comments.length} {comments.length === 1 ? t.cases.comment : t.cases.comments}
+        </span>
+      </div>
+      <div className="case-comments__content">
+        {comments.length > 0 && (
+          <div className="case-comments__list">
+            {comments.map((c) => (
+              <article key={c.id} className="case-comment">
+                <div className="case-comment__avatar" aria-hidden="true">
+                  {c.initials}
+                </div>
+                <div className="case-comment__body">
+                  <div className="case-comment__meta">
+                    <span className="case-comment__author">{c.author}</span>
+                    <time className="case-comment__date" dateTime={c.at}>{c.at}</time>
+                  </div>
+                  <p className="case-comment__text">{c.text}</p>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+        <div className="case-comments__composer">
+          <div className="comment-composer">
+            <div
+              className="comment-composer__scroll"
+              data-slot="scroll-area"
+              style={{ height: editorHeight }}
+            >
+              <div className="comment-composer__scroll-viewport" data-slot="scroll-area-viewport">
+                <textarea
+                  ref={textareaRef}
+                  className="comment-composer__textarea"
+                  value={comment}
+                  onChange={e => setComment(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder={t.cases.addComment}
+                  rows={1}
+                  aria-label={t.cases.addComment}
+                />
+              </div>
+            </div>
+            <button
+              type="button"
+              className="comment-composer__send"
+              onClick={submitComment}
+              disabled={!canSendComment}
+              aria-label={t.cases.addComment}
+            >
+              <IconSend size={14}/>
+            </button>
+          </div>
+          <p
+            className={'comment-counter' + (isOverCommentLimit ? ' is-over-limit' : '')}
+            aria-live="polite"
+          >
+            {comment.length}/{COMMENT_MAX_LENGTH}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function ActivityPane({ t }) {
   const acts = [
@@ -949,6 +1285,22 @@ function MiniBtn({ icon, label, raw, active, onClick, tone }) {
 
 // ----- reasoning thread -----
 
+/** User message bubble — mirrors chia ChatMessageBubble (role USER). */
+function ChatUserMessage({ content }) {
+  return (
+    <div className="chat-msg chat-msg--user so-turn">
+      <div className="chat-msg__avatar chat-msg__avatar--user" aria-hidden="true">
+        <IconUser size={14}/>
+      </div>
+      <div className="chat-msg__body">
+        <div className="chat-msg__bubble chat-msg__bubble--user">
+          <p className="chat-msg__prose chat-prose">{content}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ThreadTurn({ turn, onToggle, t }) {
   if (turn.kind === 'reasoning') {
     return (
@@ -1031,16 +1383,7 @@ function ThreadTurn({ turn, onToggle, t }) {
   }
 
   if (turn.kind === 'user') {
-    return (
-      <div className="so-turn" style={{ display:'flex', justifyContent:'flex-end', marginBottom:10 }}>
-        <div style={{
-          maxWidth:'85%',
-          padding:'8px 11px', borderRadius:10, borderTopRightRadius:2,
-          background:'var(--accent-glow)', border:'1px solid var(--accent-2)',
-          color:'var(--fg)', fontSize:12.5, lineHeight:1.5,
-        }}>{turn.text}</div>
-      </div>
-    );
+    return <ChatUserMessage content={turn.text}/>;
   }
 
   if (turn.kind === 'assistant') {

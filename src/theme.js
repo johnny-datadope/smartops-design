@@ -127,6 +127,7 @@ const STATUS_META = {
 const CASE_META = {
   awaiting: { label: 'Awaiting Action', hue: 237 },
   processing: { label: 'Processing', hue: 323 },
+  closed: { label: 'Closed', hue: 180 },
 };
 
 function parseFlexibleDate(timestamp) {
@@ -178,11 +179,19 @@ function formatDuration(startedAt, finishedAt) {
   return `${seconds}s`;
 }
 
+/** Modal alert header severity — Chia alert-header SEVERITY_STYLES (not table badges). */
 function modalSeverityBadgeClass(severity, sev) {
   const key = resolveSeverityKey(severity, sev);
-  if (key === 'CRITICAL') return 'modal-sev-badge modal-sev-badge--critical';
-  if (key === 'WARNING') return 'modal-sev-badge modal-sev-badge--warning';
-  return 'modal-sev-badge modal-sev-badge--info';
+  let variant = 'muted';
+  if (key === 'CRITICAL') variant = 'critical';
+  else if (key === 'WARNING') variant = 'warning';
+  else if (key === 'INFO') variant = 'info';
+  return `modal-alert-badge modal-alert-badge--severity modal-alert-badge--${variant}`;
+}
+
+/** Modal alert header status — always neutral outline (Chia alert-header), not table tint colors. */
+function modalAlertStatusBadgeClass() {
+  return 'modal-alert-badge modal-alert-badge--status';
 }
 
 Object.assign(window, {
@@ -190,6 +199,7 @@ Object.assign(window, {
   AGENT_STATUS_BADGE_CLASS, AGENT_STATUS_LEGACY, KPI_COLORS,
   resolveSeverityKey, resolveAlertStatusKey, resolveCaseStatusKey, resolveAgentStatusKey,
   severityBadgeClass, alertStatusBadgeClass, caseStatusBadgeClass, agentStatusBadgeClass,
-  parseFlexibleDate, formatTimestamp, formatDuration, modalSeverityBadgeClass,
+  parseFlexibleDate, formatTimestamp, formatDuration, modalSeverityBadgeClass, modalAlertStatusBadgeClass,
   SEV_META, STATUS_META, CASE_META,
+  LEGACY_SEV_TO_UPPER, LEGACY_STATUS_TO_ALERT, LEGACY_CASE_TO_API,
 });
