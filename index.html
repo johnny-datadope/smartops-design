@@ -194,6 +194,8 @@
   @media (min-width: 768px) {
     .layout-page { padding: 2rem 1.5rem 2.5rem; }
   }
+  /* Usage & Costs — Apolo usage-cost-reports-page (flex flex-col gap-6) */
+  .layout-page--usage { gap: 1.5rem; }
   .layout-header {
     position: sticky;
     top: 0;
@@ -273,6 +275,101 @@
   }
   .input-wrap .input:focus { box-shadow: none; }
 
+  /* Form select — Chia/Apolo Select (SelectTrigger + SelectContent + SelectItem) */
+  .form-select { position: relative; width: 100%; }
+  .form-select__trigger {
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 2.25rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--input, var(--border));
+    background: transparent;
+    color: var(--foreground);
+    font-size: 0.875rem;
+    font-weight: 400;
+    font-family: inherit;
+    line-height: 1.25rem;
+    cursor: pointer;
+    text-align: left;
+    box-shadow: var(--shadow-xs);
+    transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
+  }
+  [data-theme="dark"] .form-select__trigger {
+    background: color-mix(in oklch, var(--input) 30%, transparent);
+  }
+  [data-theme="dark"] .form-select__trigger:hover {
+    background: color-mix(in oklch, var(--input) 50%, transparent);
+  }
+  .form-select__trigger:focus-visible {
+    border-color: var(--ring);
+    box-shadow: 0 0 0 3px color-mix(in oklch, var(--ring) 50%, transparent);
+    outline: none;
+  }
+  .form-select__trigger span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+  }
+  .form-select__chevron { flex-shrink: 0; opacity: 0.5; color: var(--muted-foreground); }
+  .form-select__content {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    z-index: 60;
+    padding: 0.25rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: var(--popover);
+    color: var(--popover-foreground);
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.2), 0 4px 6px -4px rgba(0, 0, 0, 0.15);
+    max-height: var(--radix-select-content-available-height, 15rem);
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+  .form-select__item {
+    position: relative;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    min-height: 2rem;
+    padding: 0.375rem 2rem 0.375rem 0.5rem;
+    border: 0;
+    border-radius: calc(var(--radius-sm) - 2px);
+    font-size: 0.875rem;
+    font-family: inherit;
+    line-height: 1.25rem;
+    color: var(--popover-foreground);
+    background: transparent;
+    cursor: default;
+    text-align: left;
+    transition: background 0.15s, color 0.15s;
+  }
+  .form-select__item:hover,
+  .form-select__item:focus-visible {
+    background: var(--accent);
+    color: var(--accent-foreground);
+    outline: none;
+  }
+  .form-select__check {
+    position: absolute;
+    right: 0.5rem;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 1rem;
+    height: 1rem;
+    pointer-events: none;
+  }
+
   /* Buttons */
   .btn {
     display: inline-flex;
@@ -313,6 +410,11 @@
   }
   .btn--sm { height: 2rem; padding: 0 0.75rem; font-size: 0.8125rem; }
   .btn--icon { width: 2rem; height: 2rem; padding: 0; }
+  .btn:disabled {
+    opacity: 0.5;
+    pointer-events: none;
+    cursor: not-allowed;
+  }
 
   /* Badges (Apolo / shadcn-style) */
   .badge {
@@ -1819,16 +1921,448 @@
   .admin-sidebar { display: flex; }
   @media (max-width: 767.98px) { .admin-sidebar { display: none; } }
   /* Admin usage — KPI grid (Apolo: grid-cols-1 md:grid-cols-3 gap-4) */
+  /* Admin usage — period tabs (Apolo PeriodFilter) */
+  .usage-period-tabs {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.25rem;
+    border-radius: 0.5rem;
+    border: 1px solid var(--border);
+    background: color-mix(in oklch, var(--background) 60%, transparent);
+  }
+  .usage-period-tab {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    height: 2rem;
+    padding: 0 0.75rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--muted-foreground);
+    font-size: 0.875rem;
+    font-weight: 500;
+    font-family: inherit;
+    line-height: 1.25rem;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s, border-color 0.15s, box-shadow 0.15s;
+    outline: none;
+  }
+  .usage-period-tab:hover {
+    background: var(--accent);
+    color: var(--accent-foreground);
+  }
+  .usage-period-tab.is-active {
+    background: var(--accent);
+    color: var(--accent-foreground);
+  }
+  .usage-period-tab:focus-visible {
+    border-color: var(--ring);
+    box-shadow: 0 0 0 3px color-mix(in oklch, var(--ring) 50%, transparent);
+  }
+  .usage-period-tab svg {
+    flex-shrink: 0;
+    width: 1rem;
+    height: 1rem;
+    pointer-events: none;
+  }
+
+  .usage-period-filter {
+    position: relative;
+    display: inline-flex;
+  }
+
+  /* Custom range popover — Apolo PopoverContent (w-auto p-0) + footer p-3 */
+  .usage-period-popover {
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    z-index: 50;
+    width: auto;
+    padding: 0;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--popover);
+    color: var(--popover-foreground);
+    box-shadow: var(--shadow-xs), 0 10px 15px -3px rgba(0, 0, 0, 0.35), 0 4px 6px -4px rgba(0, 0, 0, 0.25);
+  }
+  .usage-period-popover__footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    min-height: 3.25rem;
+    border-top: 1px solid var(--border);
+    padding: 0.75rem;
+  }
+  .usage-period-popover__hint {
+    flex: 1;
+    min-width: 0;
+    font-size: 0.75rem;
+    line-height: 1.25rem;
+    color: var(--muted-foreground);
+    user-select: none;
+  }
+  .usage-period-popover__apply {
+    flex-shrink: 0;
+    font-weight: 500;
+  }
+
+  /* react-day-picker v9 — Apolo ui/calendar.tsx (--cell-size: 2rem, gap-4, md:flex-row) */
+  .usage-rdp-calendar {
+    --usage-rdp-cell: 2rem;
+    padding: 0.75rem;
+    background: transparent;
+    user-select: none;
+  }
+  .usage-rdp-calendar__months {
+    position: relative;
+    width: fit-content;
+  }
+  .usage-rdp-calendar__grid {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+  @media (max-width: 767.98px) {
+    .usage-period-popover {
+      right: auto;
+      left: 50%;
+      transform: translateX(-50%);
+      max-width: calc(100vw - 1.5rem);
+    }
+    .usage-rdp-calendar__grid {
+      flex-direction: column;
+    }
+  }
+  .usage-rdp-calendar__nav {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: var(--usage-rdp-cell);
+    pointer-events: none;
+  }
+  .usage-rdp-nav-btn {
+    pointer-events: auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--usage-rdp-cell);
+    height: var(--usage-rdp-cell);
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--foreground);
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .usage-rdp-nav-btn:hover {
+    background: var(--accent);
+    color: var(--accent-foreground);
+  }
+  .usage-rdp-nav-btn:focus-visible {
+    border-color: var(--ring);
+    box-shadow: 0 0 0 3px color-mix(in oklch, var(--ring) 50%, transparent);
+    outline: none;
+  }
+  .usage-rdp-month {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    width: calc(7 * var(--usage-rdp-cell));
+    flex: 0 0 auto;
+  }
+  .usage-rdp-month__caption {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: var(--usage-rdp-cell);
+    padding: 0 var(--usage-rdp-cell);
+    box-sizing: border-box;
+  }
+  .usage-rdp-month__caption-label {
+    font-size: 0.875rem;
+    font-weight: 500;
+    line-height: 1;
+    color: var(--foreground);
+    white-space: nowrap;
+  }
+  .usage-rdp-weekdays {
+    display: flex;
+    width: calc(7 * var(--usage-rdp-cell));
+  }
+  .usage-rdp-weekday {
+    width: var(--usage-rdp-cell);
+    flex: 0 0 var(--usage-rdp-cell);
+    text-align: center;
+    font-size: 0.8rem;
+    font-weight: 400;
+    line-height: var(--usage-rdp-cell);
+    color: var(--muted-foreground);
+  }
+  .usage-rdp-weeks {
+    display: flex;
+    flex-direction: column;
+    width: calc(7 * var(--usage-rdp-cell));
+  }
+  .usage-rdp-week {
+    display: flex;
+    width: calc(7 * var(--usage-rdp-cell));
+  }
+  .usage-rdp-week--offset {
+    margin-top: 0.5rem;
+  }
+  .usage-rdp-day {
+    position: relative;
+    width: var(--usage-rdp-cell);
+    height: var(--usage-rdp-cell);
+    flex: 0 0 var(--usage-rdp-cell);
+    padding: 0;
+    text-align: center;
+  }
+  .usage-rdp-day button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--foreground);
+    font-size: 0.75rem;
+    font-weight: 400;
+    font-family: inherit;
+    line-height: 1;
+    cursor: pointer;
+  }
+  .usage-rdp-day.is-outside button {
+    color: var(--muted-foreground);
+  }
+  .usage-rdp-day.is-disabled button {
+    color: var(--muted-foreground);
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
+  }
+  .usage-rdp-day:not(.is-disabled):not(.is-selected):not(.is-range-start):not(.is-range-end):not(.is-range-middle) button:hover {
+    background: var(--accent);
+    color: var(--accent-foreground);
+  }
+  /* Today — Apolo .today */
+  .usage-rdp-day.is-today:not(.is-selected):not(.is-range-start):not(.is-range-end):not(.is-range-middle) button {
+    background: var(--accent);
+    color: var(--accent-foreground);
+    border-radius: var(--radius-sm);
+  }
+  /* Range track on cell — Apolo .range_start / .range_middle / .range_end */
+  .usage-rdp-day.is-range-start,
+  .usage-rdp-day.is-range-end {
+    background: var(--accent);
+  }
+  .usage-rdp-day.is-range-start {
+    border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+  }
+  .usage-rdp-day.is-range-end {
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  }
+  .usage-rdp-day.is-range-middle {
+    background: var(--accent);
+    border-radius: 0;
+  }
+  /* Day button — Apolo CalendarDayButton */
+  .usage-rdp-day.is-selected button,
+  .usage-rdp-day.is-range-start button,
+  .usage-rdp-day.is-range-end button {
+    background: var(--primary);
+    color: var(--primary-foreground);
+  }
+  .usage-rdp-day.is-selected button {
+    border-radius: var(--radius-sm);
+  }
+  .usage-rdp-day.is-range-start button {
+    border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+  }
+  .usage-rdp-day.is-range-end button {
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  }
+  .usage-rdp-day.is-range-middle button {
+    background: var(--accent);
+    color: var(--accent-foreground);
+    border-radius: 0;
+  }
+  .usage-rdp-day.is-today.is-selected button,
+  .usage-rdp-day.is-today.is-range-start button,
+  .usage-rdp-day.is-today.is-range-end button {
+    background: var(--primary);
+    color: var(--primary-foreground);
+  }
+
   .usage-kpi-grid {
     display: grid; grid-template-columns: repeat(1, minmax(0, 1fr)); gap: 1rem;
   }
   @media (min-width: 768px) { .usage-kpi-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-  /* Admin usage — chart + top-consumers (Apolo: stacked, xl: chart | 320px panel) */
+  /* Admin usage — chart + top-consumers (Apolo usage-cost-reports-page: gap-6, xl side panel) */
   .usage-chart-grid {
-    display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; align-items: start;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1.5rem;
+    align-items: stretch;
   }
   @media (min-width: 1280px) {
-    .usage-chart-grid { grid-template-columns: minmax(0, 1fr) 320px; }
+    .usage-chart-grid {
+      grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
+    }
+  }
+
+  /* Desglose diario — Apolo daily-breakdown-chart.tsx */
+  .usage-daily-breakdown.card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    padding: 1.25rem;
+    height: 100%;
+    min-height: 0;
+  }
+  .usage-daily-breakdown__head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+  .usage-daily-breakdown__title {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    line-height: 1.25;
+  }
+  .usage-daily-breakdown__subtitle {
+    margin: 0.125rem 0 0;
+    font-size: 0.75rem;
+    line-height: 1.25;
+    color: var(--muted-foreground);
+  }
+  .usage-daily-breakdown__legend {
+    display: none;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem;
+    font-size: 0.75rem;
+    color: var(--muted-foreground);
+  }
+  @media (min-width: 640px) {
+    .usage-daily-breakdown__legend { display: flex; }
+  }
+  .usage-daily-breakdown__legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+  }
+  .usage-daily-breakdown__legend-mark {
+    flex-shrink: 0;
+    width: 0.625rem;
+    height: 0.625rem;
+    border-radius: 0.125rem;
+  }
+  .usage-daily-breakdown__legend-mark.is-line {
+    width: 1rem;
+    height: 0.125rem;
+    border-radius: 9999px;
+  }
+  .usage-daily-breakdown__chart-wrap {
+    height: 280px;
+    width: 100%;
+    color: var(--muted-foreground);
+  }
+  .usage-daily-breakdown__empty {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    justify-content: center;
+    min-height: 280px;
+    padding: 3rem 1.5rem;
+    text-align: center;
+    border: 1px dashed var(--border);
+    border-radius: var(--radius-sm);
+    background: color-mix(in oklch, var(--background) 40%, transparent);
+  }
+  .usage-daily-breakdown__empty-inner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    max-width: 24rem;
+  }
+  .usage-daily-breakdown__empty-icon {
+    color: var(--muted-foreground);
+  }
+  .usage-daily-breakdown__empty-title {
+    margin: 0;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--foreground);
+  }
+  .usage-daily-breakdown__empty-desc {
+    margin: 0;
+    font-size: 0.75rem;
+    line-height: 1.5;
+    color: var(--muted-foreground);
+  }
+  /* Recharts positions the wrapper; inner box matches Apolo ChartTooltip */
+  .usage-chart-tooltip {
+    max-width: 260px;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.75rem;
+    line-height: 1.25;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: color-mix(in oklch, var(--background) 95%, transparent);
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.35), 0 4px 6px -4px rgba(0, 0, 0, 0.25);
+    backdrop-filter: blur(8px);
+  }
+  .recharts-tooltip-wrapper {
+    z-index: 5;
+    outline: none;
+  }
+  .usage-chart-tooltip__label {
+    margin-bottom: 0.25rem;
+    font-weight: 500;
+    color: var(--foreground);
+  }
+  .usage-chart-tooltip__row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .usage-chart-tooltip__row span:last-child {
+    margin-left: auto;
+    font-family: var(--font-mono, 'Roboto Mono', monospace);
+    font-variant-numeric: tabular-nums;
+  }
+  .usage-chart-tooltip__muted {
+    color: var(--muted-foreground);
+  }
+  .usage-chart-tooltip__note {
+    margin: 0.375rem 0 0;
+    padding-top: 0.375rem;
+    border-top: 1px solid var(--border);
+    line-height: 1.375;
+    color: var(--muted-foreground);
   }
   /* Admin usage — header (Apolo: column on mobile, row on md) */
   .usage-header {
@@ -1837,6 +2371,194 @@
   @media (min-width: 768px) {
     .usage-header { flex-direction: row; align-items: flex-start; justify-content: space-between; gap: 20px; }
   }
+  /* Top cases panel header — Apolo top-cases-panel.tsx */
+  .usage-top-cases-header {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--border);
+    background: color-mix(in oklch, var(--muted) 30%, transparent);
+  }
+  @media (min-width: 768px) {
+    .usage-top-cases-header {
+      flex-direction: row;
+      align-items: flex-start;
+      justify-content: space-between;
+    }
+  }
+  .usage-top-cases-header__title {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    line-height: 1.25;
+  }
+  .usage-top-cases-header__subtitle {
+    margin: 0.125rem 0 0;
+    font-size: 0.75rem;
+    line-height: 1.25;
+    color: var(--muted-foreground);
+  }
+  .usage-top-cases-header__summary {
+    margin: 0;
+    font-size: 0.75rem;
+    font-weight: 500;
+    line-height: 1.25;
+    color: var(--muted-foreground);
+    font-family: inherit;
+  }
+  @media (min-width: 768px) {
+    .usage-top-cases-header__summary { text-align: right; flex-shrink: 0; }
+  }
+  /* Top cases event link — Apolo: truncate on cell, hover:underline on link (no overflow on <a>) */
+  .usage-top-cases-event-cell {
+    max-width: 28rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.875rem;
+    font-weight: 500;
+    line-height: 1.25;
+  }
+  .usage-top-cases-event-link {
+    color: var(--foreground);
+    text-decoration: none;
+    text-underline-offset: 4px;
+    cursor: pointer;
+  }
+  .usage-top-cases-event-link:hover,
+  .usage-top-cases-event-link:focus-visible {
+    text-decoration-line: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 4px;
+  }
+  .usage-top-cases-event-text {
+    color: var(--foreground);
+  }
+
+  /* Top consumidores — Apolo top-users-panel.tsx */
+  .usage-top-users.card {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    overflow: hidden;
+    padding-top: 0;
+    padding-bottom: 0;
+    min-height: 0;
+    height: 100%;
+  }
+  .usage-panel-header {
+    padding: 1rem;
+    border-bottom: 1px solid var(--border);
+    background: color-mix(in oklch, var(--muted) 30%, transparent);
+  }
+  .usage-panel-header__title {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    line-height: 1.25;
+  }
+  .usage-panel-header__subtitle {
+    margin: 0.125rem 0 0;
+    font-size: 0.75rem;
+    line-height: 1.25;
+    color: var(--muted-foreground);
+  }
+  .usage-top-users-list {
+    display: flex;
+    flex-direction: column;
+    padding: 0 1rem;
+  }
+  .usage-top-users-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 0;
+  }
+  .usage-top-users-row + .usage-top-users-row {
+    border-top: 1px solid color-mix(in oklch, var(--border) 70%, transparent);
+  }
+  .usage-top-users-avatar {
+    width: 2.25rem;
+    height: 2.25rem;
+    flex-shrink: 0;
+    border-radius: 9999px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    font-weight: 600;
+    border: 1px solid color-mix(in srgb, #22d3ee 25%, transparent);
+    background: color-mix(in srgb, #06b6d4 10%, transparent);
+    color: #67e8f9;
+  }
+  .usage-top-users-body {
+    min-width: 0;
+    flex: 1;
+  }
+  .usage-top-users-name {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.875rem;
+    font-weight: 500;
+    line-height: 1.25;
+    color: var(--foreground);
+  }
+  .usage-top-users-meta {
+    margin: 0.125rem 0 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.75rem;
+    line-height: 1.25;
+    color: var(--muted-foreground);
+  }
+  .usage-top-users-cost {
+    text-align: right;
+    flex-shrink: 0;
+    font-family: var(--font-mono, 'Roboto Mono', monospace);
+    font-size: 0.875rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: var(--foreground);
+  }
+  .usage-top-users-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 2.5rem 1rem;
+    text-align: center;
+  }
+  .usage-top-users-empty__icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    margin-bottom: 0.5rem;
+    border-radius: var(--radius-sm);
+    background: var(--muted);
+    color: var(--foreground);
+  }
+  .usage-top-users-empty__title {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 500;
+    line-height: 1.25;
+    color: var(--foreground);
+  }
+  .usage-top-users-empty__desc {
+    margin: 0;
+    max-width: 20rem;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    color: var(--muted-foreground);
+  }
+
   /* Admin users — header (Apolo: stacked on mobile, row on md, button full-width mobile) */
   .users-header {
     display: flex; flex-direction: column; gap: 1rem;
@@ -1917,6 +2639,8 @@
 </style>
 <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/prop-types@15.8.1/prop-types.min.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/recharts@2.15.4/umd/Recharts.js" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
 </head>
 <body>
@@ -1935,6 +2659,7 @@
 <script type="text/babel" src="src/events.jsx"></script>
 <script type="text/babel" src="src/event_detail.jsx"></script>
 <script type="text/babel" src="src/users.jsx"></script>
+<script type="text/babel" src="src/usage-period-calendar.jsx"></script>
 <script type="text/babel" src="src/usage.jsx"></script>
 <script type="text/babel" src="src/administration.jsx"></script>
 <script type="text/babel" src="src/app.jsx"></script>

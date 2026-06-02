@@ -25,7 +25,7 @@ Open http://127.0.0.1:5173 — sign in with any credentials (mock auth).
 ## Layout
 
 ```
-index.html         # entry — Datadope CSS vars, Open Sans, utility classes, script tags
+index.html         # entry — Datadope CSS vars, Open Sans, Recharts 2.15.4 (Apolo), script tags
 uploads/           # smartops-logo.svg, smartops-logo-white.svg
 src/
   theme.js         # severity / status / KPI metadata, badge class maps

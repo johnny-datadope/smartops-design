@@ -54,20 +54,41 @@ const IconEyeOff = (p) => <Icon {...p} d={<><path d="M10.733 5.076 10.2 5.65A7 7
 const IconAlert = (p) => <Icon {...p} d={<><path d="M10.3 3.86a2 2 0 0 1 3.4 0l8.2 14.14A2 2 0 0 1 20.2 21H3.8a2 2 0 0 1-1.7-3L10.3 3.86z"/><path d="M12 9v5"/><path d="M12 17.5v.01"/></>} />;
 const IconTriangle = (p) => <Icon {...p} d={'M13.73 4a2 2 0 0 0-3.46 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z'} />;
 const IconChevronDown = (p) => <Icon {...p} d={'m6 9 6 6 6-6'} />;
+// Lucide ChevronLeft / ChevronRight — Apolo admin-sidebar collapse
+const IconChevronLeft = (p) => <Icon {...p} d={'m15 18-6-6 6-6'} />;
+const IconChevronRight = (p) => <Icon {...p} d={'m9 18 6-6-6-6'} />;
+// Lucide BarChart3 — Apolo admin-sidebar usage nav
+const IconBarChart3 = (p) => <Icon {...p} d={<>
+  <path d="M3 3v18h18"/>
+  <path d="M18 17V9"/>
+  <path d="M13 17V5"/>
+  <path d="M8 17v-3"/>
+</>} />;
 const IconHash = (p) => <Icon {...p} d={<><path d="M4 9h16"/><path d="M4 15h16"/><path d="M10 3 8 21"/><path d="m16 3-2 18"/></>} />;
 const IconShieldCheck = (p) => <Icon {...p} d={<>
   <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>
   <path d="m9 12 2 2 4-4"/>
 </>} />;
 const IconActivity = (p) => <Icon {...p} d="M22 12h-4l-3 9L9 3l-3 9H2" />;
+// Lucide LineChart — Apolo daily-breakdown-chart empty state
+const IconLineChart = (p) => <Icon {...p} d={<>
+  <path d="M3 3v16a2 2 0 0 0 2 2h16"/>
+  <path d="m19 9-5 5-4-4-3 3"/>
+</>} />;
 const IconClose = (p) => <Icon {...p} d={<><path d="M18 6 6 18"/><path d="m6 6 12 12"/></>} />;
 const IconXCircle = (p) => <Icon {...p} d={<><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></>} />;
 const IconChevron = (p) => <Icon {...p} d={'m9 18 6-6-6-6'} />;
-const IconSparkle = (p) => <Icon {...p} d={<>
-  <path d="M12 3v4"/><path d="M12 17v4"/>
-  <path d="M3 12h4"/><path d="M17 12h4"/>
-  <path d="m5.6 5.6 2.8 2.8"/><path d="m15.6 15.6 2.8 2.8"/>
-  <path d="m5.6 18.4 2.8-2.8"/><path d="m15.6 8.4 2.8-2.8"/>
+// Lucide Sparkles — Apolo usage KPI "Tokens consumidos"
+const IconSparkles = (p) => <Icon {...p} d={<>
+  <path d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"/>
+  <path d="M20 2v4"/><path d="M22 4h-4"/>
+  <path d="M4 18v2"/><path d="M5 20H3"/>
+</>} />;
+const IconSparkle = IconSparkles;
+// Lucide DollarSign — Apolo usage KPI "Coste total"
+const IconDollarSign = (p) => <Icon {...p} d={<>
+  <line x1="12" y1="2" x2="12" y2="22"/>
+  <path d="M17 5H9.5a4.5 4.5 0 0 0 0 9H14.5a4.5 4.5 0 0 1 0 9H6"/>
 </>} />;
 const IconCopy = (p) => <Icon {...p} d={<>
   <rect x="9" y="9" width="13" height="13" rx="2"/>
@@ -109,6 +130,12 @@ const IconCalendar = (p) => <Icon {...p} d={<>
   <path d="M3 10h18"/>
 </>} />;
 const IconUsers = (p) => <Icon {...p} d={<><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></>} />;
+// Lucide UsersRound — Apolo top-users-panel empty state
+const IconUsersRound = (p) => <Icon {...p} d={<>
+  <path d="M18 21a8 8 0 0 0-5-5.66"/>
+  <path d="M6 21a8 8 0 0 0 5-5.66"/>
+  <circle cx="12" cy="11" r="4"/>
+</>} />;
 const IconThumbsUp = (p) => <Icon {...p} d={<><path d="M7 10v12"/><path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z"/></>} />;
 const IconThumbsDown = (p) => <Icon {...p} d={<><path d="M17 14V2"/><path d="M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.76a2 2 0 0 0-1.79 1.11L12 22a3.13 3.13 0 0 1-3-3.88Z"/></>} />;
 const IconLifeBuoy = (p) => <Icon {...p} d={<><circle cx="12" cy="12" r="10"/><path d="m4.93 4.93 4.24 4.24"/><path d="m14.83 9.17 4.24-4.24"/><path d="m14.83 14.83 4.24 4.24"/><path d="m9.17 14.83-4.24 4.24"/><circle cx="12" cy="12" r="4"/></>} />;
@@ -182,9 +209,9 @@ const IconGoogle = ({ size = 18 }) => (
 // Expose to other files (window + globalThis for Babel standalone script order).
 const ICON_EXPORTS = {
   Icon, IconPulse, IconBell, IconSettings, IconSearch, IconFilter, IconArchive, IconPlus,
-  IconLogout, IconHeadset, IconArrowUpDown, IconArrowUp, IconArrowDown, IconCheck, IconCheckCircle2, IconEye, IconEyeOff, IconAlert, IconTriangle, IconChevronDown, IconHash, IconShieldCheck, IconActivity,
-  IconClose, IconXCircle, IconChevron, IconSparkle, IconCopy, IconLink, IconMaximize, IconMinimize, IconMinimize2, IconExternalLink, IconTerminal,
-  IconBriefcase, IconMessageSquare, IconDatabase, IconClock, IconCalendar, IconUsers, IconThumbsUp, IconThumbsDown, IconPenLine, IconGripVertical,
+  IconLogout, IconHeadset, IconArrowUpDown, IconArrowUp, IconArrowDown, IconCheck, IconCheckCircle2, IconEye, IconEyeOff, IconAlert, IconTriangle, IconChevronDown, IconHash, IconShieldCheck, IconActivity, IconLineChart,
+  IconClose, IconXCircle, IconChevron, IconChevronLeft, IconChevronRight, IconBarChart3, IconSparkles, IconSparkle, IconDollarSign, IconCopy, IconLink, IconMaximize, IconMinimize, IconMinimize2, IconExternalLink, IconTerminal,
+  IconBriefcase, IconMessageSquare, IconDatabase, IconClock, IconCalendar, IconUsers, IconUsersRound, IconThumbsUp, IconThumbsDown, IconPenLine, IconGripVertical,
   IconLifeBuoy, IconRotateCcw, IconFileText, IconShare, IconUser, IconUserX, IconSend, IconBrain, IconBrainCircuit, IconMoreVertical, IconSun, IconMoon,
   IconInvestigate, IconGoogle,
 };

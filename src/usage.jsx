@@ -3,9 +3,6 @@
 // #/admin/usage. All data here is mocked deterministically so the chart is
 // stable as the user flips between range presets.
 
-const BUCKET_NOUN  = { hour:'hour',  day:'day',   week:'week',   month:'month',  year:'year'   };
-const BUCKET_TITLE = { hour:'Hourly breakdown', day:'Daily breakdown', week:'Weekly breakdown', month:'Monthly breakdown', year:'Yearly breakdown' };
-
 function formatBucketShort(d, bucket) {
   if (bucket === 'hour')  return d.toLocaleTimeString('en-US', { hour: 'numeric' }).replace(' ', '');
   if (bucket === 'day')   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
@@ -100,8 +97,28 @@ function weekOfYear(d) {
   return Math.floor((d - a) / (7 * 86400000));
 }
 
+/** Reference curve for “Últimos 7 días” — matches Apolo usage screenshot (May 27 – Jun 2). */
+const USAGE_DEMO_7D_PATTERN = [
+  { cost: 0, investigations: 0 },
+  { cost: 1.05, investigations: 2 },
+  { cost: 0.55, investigations: 4 },
+  { cost: 0, investigations: 0 },
+  { cost: 0, investigations: 0 },
+  { cost: 0, investigations: 0 },
+  { cost: 0.15, investigations: 3 },
+];
+
 function generateUsageData(startDate, endDate, bucket) {
   const boundaries = bucketBoundaries(startDate, endDate, bucket);
+
+  if (bucket === 'day' && boundaries.length === 7) {
+    return boundaries.map((date, i) => {
+      const p = USAGE_DEMO_7D_PATTERN[i];
+      const tokens = Math.max(0, Math.round(p.cost / 0.0000054));
+      return { date, tokens, cost: p.cost, investigations: p.investigations };
+    });
+  }
+
   const out = [];
   // Per-bucket multipliers so the volume of a week/month bucket is plausibly
   // larger than a single hour or day.
@@ -153,6 +170,30 @@ function usageRangeLabel(t, key) {
   return key;
 }
 
+/** Period in panel subtitles — Apolo usage-cost-reports-page + period-filter. */
+function formatUsagePeriodIsoRange(start, end) {
+  const s = toISODate(startOfDay(start));
+  const e = toISODate(startOfDay(end));
+  return s === e ? s : `${s} – ${e}`;
+}
+
+/** Custom tab button label only — Apolo period-filter (MMM d – MMM d). */
+function formatUsageCustomRangeLabel(from, to, locale) {
+  const loc = usageLocale(locale);
+  const fmt = (d) => d.toLocaleDateString(loc, { month: 'short', day: 'numeric' });
+  const a = fmt(from);
+  const b = fmt(to);
+  return a === b ? a : `${a} – ${b}`;
+}
+
+/** Panel subtitles — Apolo formatPeriodLabel(breakdownRange): ISO dates only. */
+function usagePeriodScopeLabel(startDate, endDate, focusDay) {
+  if (focusDay?.date) {
+    return formatUsagePeriodIsoRange(focusDay.date, focusDay.date);
+  }
+  return formatUsagePeriodIsoRange(startDate, endDate);
+}
+
 // ---- date helpers (local TZ, no UTC drift) ----
 
 function startOfDay(d) {
@@ -189,8 +230,44 @@ function formatDMY(d) {
 // to its own period max and stack the resulting heights. A fully filled bar
 // means "this day was at the period's peak for all three metrics".
 
+// Apolo usage-cost-reports/formatters.ts
+function usageLocale(lang) {
+  return lang === 'es-ES' ? 'es-ES' : 'en-GB';
+}
+
+function formatCompactNumber(value, locale) {
+  return new Intl.NumberFormat(locale, { notation: 'compact', maximumFractionDigits: 1 }).format(value);
+}
+
+function formatAverageCompact(total, days, locale) {
+  if (days <= 0) return formatCompactNumber(0, locale);
+  return formatCompactNumber(total / days, locale);
+}
+
+function formatUsageCurrency(value) {
+  const n = typeof value === 'number' ? value : parseFloat(value) || 0;
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2,
+  }).format(n);
+}
+
+function formatAverageCurrency(total, days) {
+  if (days <= 0) return formatUsageCurrency(0);
+  return formatUsageCurrency(total / days);
+}
+
+function formatAverageDecimal(total, days, locale) {
+  if (days <= 0) return '0';
+  return new Intl.NumberFormat(locale, { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(total / days);
+}
+
+function formatInteger(value, locale) {
+  return new Intl.NumberFormat(locale).format(Math.round(value));
+}
+
 function UsageMetricsPage() {
-  const { t } = useI18n();
+  const { lang, t } = useI18n();
+  const locale = usageLocale(lang);
   const [range, setRange] = React.useState('30d');
   const [customRange, setCustomRange] = React.useState(null);
   const [drillIdx, setDrillIdx] = React.useState(null);
@@ -232,35 +309,21 @@ function UsageMetricsPage() {
     investigations: a.investigations + d.investigations,
   }), { tokens: 0, cost: 0, investigations: 0 });
 
-  const maxes = {
-    cost: Math.max(...data.map(d => d.cost), 0.01),
-    tokens: Math.max(...data.map(d => d.tokens), 1),
-    investigations: Math.max(...data.map(d => d.investigations), 1),
-  };
-  const avg = {
-    tokens: Math.round(totals.tokens / data.length),
-    cost: totals.cost / data.length,
-    investigations: totals.investigations / data.length,
-  };
-
-  const rangeLabel = React.useMemo(() => {
-    if (range === 'custom' && customRange) {
-      return `${formatDMY(customRange.from)} → ${formatDMY(customRange.to)}`;
-    }
-    return usageRangeLabel(t, range);
-  }, [range, customRange, t]);
+  const periodDays = daysBetweenInclusive(startDate, endDate);
 
   const focusDay = drillIdx != null ? data[drillIdx] : null;
+
+  const scopePeriodLabel = React.useMemo(
+    () => usagePeriodScopeLabel(startDate, endDate, focusDay),
+    [startDate.getTime(), endDate.getTime(), focusDay],
+  );
   const topUsers = React.useMemo(
     () => buildTopUsers(focusDay ? [focusDay] : data),
     [focusDay, data]
   );
 
-  const bucketNoun = BUCKET_NOUN[bucket];
-  const bucketTitle = BUCKET_TITLE[bucket];
-
   return (
-    <div className="layout-page" data-screen-label="05 Usage & Costs">
+    <div className="layout-page layout-page--usage" data-screen-label="05 Usage & Costs">
       <p className="admin-mobile-label" style={{ fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--muted-foreground)', margin: 0 }}>
         {t.admin.sidebar.title}
       </p>
@@ -279,87 +342,100 @@ function UsageMetricsPage() {
       <div className="usage-kpi-grid">
         <UsageSummary
           label={t.admin.usage.kpi.totalCost}
-          value={`$${totals.cost.toFixed(2)}`}
-          sub={t.admin.usage.kpi.averagePerDay.replace('{value}', `$${avg.cost.toFixed(2)}`)}
+          value={formatUsageCurrency(totals.cost)}
+          sub={t.admin.usage.kpi.averagePerDay.replace('{value}', formatAverageCurrency(totals.cost, periodDays))}
           iconBg="color-mix(in srgb, #f43f5e 10%, transparent)" iconColor="#fb7185"
-          icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v20"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>}
+          icon={<IconDollarSign size={16}/>}
         />
         <UsageSummary
           label={t.admin.usage.kpi.tokensConsumed}
-          value={formatTokens(totals.tokens)}
-          sub={t.admin.usage.kpi.averagePerDay.replace('{value}', formatTokens(avg.tokens))}
+          value={formatCompactNumber(totals.tokens, locale)}
+          sub={t.admin.usage.kpi.averagePerDay.replace('{value}', formatAverageCompact(totals.tokens, periodDays, locale))}
           iconBg="color-mix(in srgb, #10b981 10%, transparent)" iconColor="#34d399"
-          icon={<IconSparkle size={16}/>}
+          icon={<IconSparkles size={16}/>}
         />
         <UsageSummary
           label={t.admin.usage.kpi.cases}
-          value={totals.investigations.toLocaleString()}
-          sub={t.admin.usage.kpi.averagePerDay.replace('{value}', avg.investigations.toFixed(1))}
+          value={formatCompactNumber(totals.investigations, locale)}
+          sub={t.admin.usage.kpi.averagePerDay.replace('{value}', formatAverageDecimal(totals.investigations, periodDays, locale))}
           iconBg="color-mix(in srgb, #06b6d4 10%, transparent)" iconColor="#22d3ee"
           icon={<IconActivity size={16}/>}
         />
       </div>
 
       <div className="usage-chart-grid">
-        <div className="card" style={{ padding:'18px 20px 22px' }}>
-          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:14, gap:16, flexWrap:'wrap' }}>
-            <div>
-              <div style={{ fontSize:13.5, fontWeight:600 }}>{t.admin.usage.chart.title}</div>
-              <div style={{ fontSize:11.5, color:'var(--fg-3)', marginTop:2 }}>
-                {t.admin.usage.chart.subtitle}
-              </div>
-            </div>
-            <div style={{ display:'flex', gap:14, alignItems:'center', flexWrap:'wrap' }}>
-              <UsageLegendDot color="#22d3ee" label={t.admin.usage.chart.costSeries + ' · ' + t.admin.usage.chart.leftAxisHint}/>
-              <UsageLegendLine color="#f87171" label={t.admin.usage.chart.casesSeries + ' · ' + t.admin.usage.chart.rightAxisHint}/>
-            </div>
-          </div>
-          <UsageChart
-            data={data}
-            maxes={maxes}
-            bucket={bucket}
-            selectedIdx={drillIdx}
-            onSelect={setDrillIdx}
-          />
-        </div>
-        <UsageTopUsers users={topUsers} scopeLabel={focusDay ? formatBucketLong(focusDay.date, bucket) : rangeLabel} t={t}/>
+        <UsageDailyBreakdown
+          data={data}
+          bucket={bucket}
+          totals={totals}
+          selectedIdx={drillIdx}
+          onSelect={setDrillIdx}
+          t={t}
+        />
+        <UsageTopUsers users={topUsers} scopeLabel={scopePeriodLabel} t={t} locale={locale}/>
       </div>
 
       <UsageDrilldown
         day={drillIdx != null ? data[drillIdx] : null}
         rangeData={data}
         rangeTotals={totals}
-        rangeLabel={rangeLabel}
+        scopePeriodLabel={scopePeriodLabel}
         bucket={bucket}
       />
     </div>
   );
 }
 
+/** Period tabs + custom range popover — Apolo period-filter.tsx */
 function UsageRangePicker({ range, customRange, onChange }) {
-  const { t } = useI18n();
+  const { lang, t } = useI18n();
+  const locale = usageLocale(lang);
   const [open, setOpen] = React.useState(false);
   const wrapRef = React.useRef(null);
-
   const today = startOfDay(new Date());
-  const todayISO = toISODate(today);
 
-  const defaultFrom = React.useMemo(() => {
-    if (customRange) return customRange.from;
-    const d = new Date(today); d.setDate(d.getDate() - 29);
-    return d;
-  }, [customRange]);
-  const defaultTo = customRange?.to || today;
+  const [draftRange, setDraftRange] = React.useState(
+    () => (range === 'custom' && customRange
+      ? { from: startOfDay(customRange.from), to: startOfDay(customRange.to) }
+      : undefined)
+  );
 
-  const [from, setFrom] = React.useState(toISODate(defaultFrom));
-  const [to, setTo] = React.useState(toISODate(defaultTo));
+  const isCustom = range === 'custom';
+  const canApply = Boolean(draftRange?.from && draftRange?.to);
+  const customLabel = isCustom && customRange
+    ? formatUsageCustomRangeLabel(customRange.from, customRange.to, locale)
+    : t.admin.usage.period.custom;
 
-  React.useEffect(() => {
-    if (open) {
-      setFrom(toISODate(defaultFrom));
-      setTo(toISODate(defaultTo));
+  const defaultCalendarMonth = draftRange?.from
+    ?? (isCustom && customRange ? customRange.from : null)
+    ?? (() => { const d = new Date(today); d.setDate(d.getDate() - 29); return d; })();
+
+  const footerHint = draftRange?.from && draftRange?.to
+    ? formatUsageRangeFooterLabel(draftRange.from, draftRange.to, locale)
+    : t.admin.usage.period.selectRange;
+
+  const handleOpen = (next) => {
+    setOpen(next);
+    if (next) {
+      if (isCustom && customRange) {
+        setDraftRange({
+          from: startOfDay(customRange.from),
+          to: startOfDay(customRange.to),
+        });
+      } else {
+        setDraftRange(undefined);
+      }
     }
-  }, [open]);
+  };
+
+  const applyCustom = () => {
+    if (!draftRange?.from || !draftRange?.to) return;
+    onChange({
+      key: 'custom',
+      customRange: { from: draftRange.from, to: draftRange.to },
+    });
+    setOpen(false);
+  };
 
   React.useEffect(() => {
     if (!open) return;
@@ -370,112 +446,59 @@ function UsageRangePicker({ range, customRange, onChange }) {
     return () => window.removeEventListener('mousedown', onDoc);
   }, [open]);
 
-  const isCustom = range === 'custom';
-  const valid = from && to && fromISODate(from) <= fromISODate(to);
-  const customLabel = isCustom && customRange
-    ? `${formatDMY(customRange.from)} → ${formatDMY(customRange.to)}`
-    : t.admin.usage.period.custom;
-
-  const apply = () => {
-    if (!valid) return;
-    onChange({ key: 'custom', customRange: { from: fromISODate(from), to: fromISODate(to) } });
-    setOpen(false);
-  };
-
   return (
-    <div ref={wrapRef} style={{ position:'relative', display:'inline-flex' }}>
-      <div style={{
-        display:'inline-flex', flexWrap:'wrap', gap:2, padding:3, borderRadius:9,
-        background:'var(--bg-2)', border:'1px solid var(--line)',
-      }}>
-        {USAGE_RANGE_PRESETS.map(r => {
+    <div ref={wrapRef} className="usage-period-filter">
+      <div className="usage-period-tabs">
+        {USAGE_RANGE_PRESETS.map((r) => {
           const active = !isCustom && r.key === range;
           return (
-            <button key={r.key} onClick={() => onChange({ key: r.key, customRange: null })} style={{
-              padding:'6px 12px', borderRadius:6,
-              background: active ? 'var(--bg-3)' : 'transparent',
-              border: active ? '1px solid var(--line-2)' : '1px solid transparent',
-              color: active ? 'var(--fg)' : 'var(--fg-2)',
-              fontSize:12, fontWeight: active ? 600 : 500,
-              transition:'all .12s',
-            }}>{usageRangeLabel(t, r.key)}</button>
+            <button
+              key={r.key}
+              type="button"
+              className={'usage-period-tab' + (active ? ' is-active' : '')}
+              aria-pressed={active}
+              onClick={() => { onChange({ key: r.key, customRange: null }); setOpen(false); }}
+            >
+              {usageRangeLabel(t, r.key)}
+            </button>
           );
         })}
-        <button onClick={() => setOpen(o => !o)} title={t.admin.usage.period.custom} style={{
-          padding:'6px 12px', borderRadius:6,
-          background: isCustom ? 'var(--bg-3)' : 'transparent',
-          border: isCustom ? '1px solid var(--line-2)' : '1px solid transparent',
-          color: isCustom ? 'var(--fg)' : 'var(--fg-2)',
-          fontSize:12, fontWeight: isCustom ? 600 : 500,
-          display:'inline-flex', alignItems:'center', gap:6, whiteSpace:'nowrap',
-        }}>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="3" y="4" width="18" height="18" rx="2"/>
-            <line x1="16" y1="2" x2="16" y2="6"/>
-            <line x1="8" y1="2" x2="8" y2="6"/>
-            <line x1="3" y1="10" x2="21" y2="10"/>
-          </svg>
-          {customLabel}
+        <button
+          type="button"
+          className={'usage-period-tab' + (isCustom ? ' is-active' : '')}
+          aria-pressed={isCustom}
+          aria-expanded={open}
+          onClick={() => handleOpen(!open)}
+        >
+          <IconCalendar size={16} aria-hidden="true"/>
+          <span>{customLabel}</span>
         </button>
       </div>
 
       {open && (
-        <div style={{
-          position:'absolute', top:'calc(100% + 6px)', right:0, zIndex:30,
-          background:'var(--bg-2)', border:'1px solid var(--line-2)', borderRadius:10,
-          padding:'14px', minWidth:300,
-          boxShadow:'0 22px 40px -12px rgba(0,0,0,0.55)',
-        }}>
-          <div style={{ fontSize:12, color:'var(--fg-3)', marginBottom:10, letterSpacing:'0.02em' }}>
-            {t.admin.usage.period.selectRange}
-          </div>
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:10 }}>
-            <label style={pickerLabelStyle}>
-              {t.admin.usage.period.startDate}
-              <input type="date" value={from} max={to || todayISO}
-                onChange={e => setFrom(e.target.value)} style={pickerInputStyle}/>
-            </label>
-            <label style={pickerLabelStyle}>
-              {t.admin.usage.period.endDate}
-              <input type="date" value={to} min={from} max={todayISO}
-                onChange={e => setTo(e.target.value)} style={pickerInputStyle}/>
-            </label>
-          </div>
-          {!valid && (
-            <div style={{ fontSize:11, color:'var(--sev-crit)', marginBottom:10 }}>
-              {t.admin.usage.period.startDate} → {t.admin.usage.period.endDate}
-            </div>
-          )}
-          <div style={{ display:'flex', justifyContent:'flex-end', gap:8 }}>
-            <button onClick={() => setOpen(false)} style={pickerSecondaryStyle}>{t.common.cancel}</button>
-            <button onClick={apply} disabled={!valid} style={pickerPrimaryStyle(!valid)}>{t.admin.usage.period.applyRange}</button>
+        <div className="usage-period-popover" role="dialog" aria-label={t.admin.usage.period.custom}>
+          <UsageRangeCalendar
+            range={draftRange}
+            onRangeChange={setDraftRange}
+            defaultMonth={defaultCalendarMonth}
+            locale={locale}
+          />
+          <div className="usage-period-popover__footer">
+            <span className="usage-period-popover__hint">{footerHint}</span>
+            <button
+              type="button"
+              className="btn btn--primary btn--sm usage-period-popover__apply"
+              disabled={!canApply}
+              onClick={applyCustom}
+            >
+              {t.admin.usage.period.applyRange}
+            </button>
           </div>
         </div>
       )}
     </div>
   );
 }
-
-const pickerLabelStyle = {
-  display:'flex', flexDirection:'column', gap:5,
-  fontSize:11, color:'var(--fg-3)', letterSpacing:'0.02em',
-};
-const pickerInputStyle = {
-  background:'var(--bg)', border:'1px solid var(--line-2)', borderRadius:7,
-  padding:'7px 9px', color:'var(--fg)', fontSize:12, fontFamily:'inherit',
-  colorScheme:'inherit',
-};
-const pickerSecondaryStyle = {
-  padding:'6px 12px', borderRadius:7, fontSize:11.5,
-  background:'var(--bg)', border:'1px solid var(--line-2)', color:'var(--fg-2)',
-};
-const pickerPrimaryStyle = (disabled) => ({
-  padding:'6px 14px', borderRadius:7, fontSize:11.5, fontWeight:600,
-  background: disabled ? 'var(--bg-3)' : 'var(--accent)',
-  border: '1px solid ' + (disabled ? 'var(--line-2)' : 'var(--accent)'),
-  color: disabled ? 'var(--fg-4)' : 'var(--accent-ink)',
-  opacity: disabled ? 0.6 : 1,
-});
 
 function UsageSummary({ label, value, sub, iconBg, iconColor, icon }) {
   return (
@@ -496,264 +519,229 @@ function UsageSummary({ label, value, sub, iconBg, iconColor, icon }) {
   );
 }
 
-function UsageLegendDot({ color, label }) {
+// Apolo daily-breakdown-chart.tsx — Recharts 2.15.4 (same UMD bundle as chia/src/apolo)
+const {
+  ResponsiveContainer,
+  ComposedChart,
+  Bar,
+  Cell,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+} = Recharts;
+
+const USAGE_COST_COLOR = '#22d3ee'; // cyan-400
+const USAGE_COST_SELECTED = '#0891b2';
+const USAGE_CASES_COLOR = '#f87171'; // rose-400
+const USAGE_CHART_HEIGHT = 280;
+
+/** UTC labels — Apolo billing-series-chart.ts */
+const UTC_MONTH_DAY_LABEL = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'UTC',
+  month: 'short',
+  day: 'numeric',
+});
+
+function usageBucketChartLabel(d, bucket) {
+  if (bucket === 'day' || bucket === 'week') return UTC_MONTH_DAY_LABEL.format(d);
+  return formatBucketShort(d, bucket);
+}
+
+/** Mock rows → Recharts points (BillingChartPoint shape) */
+function usageSeriesToChartPoints(data, bucket) {
+  return data.map((d) => ({
+    label: usageBucketChartLabel(d.date, bucket),
+    bucketStart: toISODate(startOfDay(d.date)),
+    cost: d.cost,
+    costWithMarkup: d.cost.toFixed(2),
+    cases: d.investigations,
+  }));
+}
+
+function UsageLegendSwatch({ type, color, label }) {
   return (
-    <div style={{ display:'inline-flex', alignItems:'center', gap:6, fontSize:11.5, color:'var(--fg-2)' }}>
-      <span style={{
-        width:10, height:10, borderRadius:3,
-        background: color,
-        border:`1px solid color-mix(in oklch, ${color} 45%, transparent)`,
-      }}/>
+    <span className="usage-daily-breakdown__legend-item">
+      <span
+        aria-hidden="true"
+        className={'usage-daily-breakdown__legend-mark' + (type === 'line' ? ' is-line' : '')}
+        style={{ backgroundColor: color }}
+      />
       {label}
-    </div>
+    </span>
   );
 }
 
-function UsageLegendLine({ color, label }) {
-  return (
-    <div style={{ display:'inline-flex', alignItems:'center', gap:6, fontSize:11.5, color:'var(--fg-2)' }}>
-      <svg width="18" height="10" viewBox="0 0 18 10">
-        <path d="M0 5 L18 5" stroke={color} strokeWidth="1.5" strokeDasharray="3 2" fill="none"/>
-      </svg>
-      {label}
-    </div>
-  );
-}
-
-function UsageChart({ data, maxes, bucket = 'day', selectedIdx, onSelect }) {
-  const W = 1000;
-  const H = 400;
-  const PAD_L = 56, PAD_R = 56, PAD_T = 16, PAD_B = 34;
-  const innerW = W - PAD_L - PAD_R;
-  const innerH = H - PAD_T - PAD_B;
-  const bandW = innerW / data.length;
-  const barW = Math.max(5, Math.min(26, bandW * 0.62));
-  const bottom = PAD_T + innerH;
-
-  // Bars = cost (left axis, $). Line = investigations / cases (right axis).
-  const yMaxCost = niceCeil(maxes.cost);
-  const yMaxCases = niceCeil(maxes.investigations);
-
-  const gridSteps = 5;
-  const yLines = Array.from({ length: gridSteps + 1 }, (_, i) => {
-    const y = PAD_T + innerH * (1 - i / gridSteps);
-    const costAt = (i / gridSteps) * yMaxCost;
-    const casesAt = (i / gridSteps) * yMaxCases;
-    return { y, costAt, casesAt, isBase: i === 0 };
-  });
-
-  const tickEvery = data.length <= 10 ? 1 : data.length <= 35 ? 5 : 10;
-
-  const linePoints = data.map((d, i) => {
-    const x = PAD_L + i * bandW + bandW / 2;
-    const y = bottom - (d.investigations / yMaxCases) * innerH;
-    return { x, y };
-  });
-  const linePath = linePoints
-    .map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)} ${p.y.toFixed(1)}`)
-    .join(' ');
-
-  const containerRef = React.useRef(null);
-  const [hover, setHover] = React.useState(null);
-
-  const onMove = (e) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const localX = e.clientX - rect.left;
-    const svgX = (localX / rect.width) * W;
-    const idx = Math.floor((svgX - PAD_L) / bandW);
-    if (idx < 0 || idx >= data.length) { setHover(null); return; }
-    const cx = PAD_L + idx * bandW + bandW / 2;
-    const barH = (data[idx].cost / yMaxCost) * innerH;
-    const topY = bottom - barH;
-    setHover({ idx, cx, topY });
-  };
+/** Card shell + empty state — Apolo DailyBreakdownChart */
+function UsageDailyBreakdown({ data, bucket, totals, selectedIdx, onSelect, t }) {
+  const isEmpty = totals.cost === 0 && totals.investigations === 0;
+  const costHint = t.admin.usage.chart.costSeries + ' · ' + t.admin.usage.chart.leftAxisHint;
+  const casesHint = t.admin.usage.chart.casesSeries + ' · ' + t.admin.usage.chart.rightAxisHint;
 
   return (
-    <div ref={containerRef} style={{ position:'relative', width:'100%' }}>
-      <svg
-        viewBox={`0 0 ${W} ${H}`}
-        width="100%"
-        style={{ display:'block', height:'auto', aspectRatio: `${W} / ${H}`, overflow:'visible', cursor: hover ? 'pointer' : 'default' }}
-        onMouseMove={onMove}
-        onMouseLeave={() => setHover(null)}
-      >
-        {/* Grid + dual axis labels */}
-        {yLines.map((l, i) => (
-          <g key={i}>
-            <line x1={PAD_L} x2={W - PAD_R} y1={l.y} y2={l.y}
-              stroke="var(--line)" strokeWidth="1"
-              strokeDasharray={l.isBase ? '' : '2 4'}
-              opacity={l.isBase ? 1 : 0.7}/>
-            <text x={PAD_L - 10} y={l.y + 3} textAnchor="end"
-              fontSize="10" fill="var(--fg-4)" fontFamily="Geist Mono, monospace">
-              ${formatAxisCost(l.costAt)}
-            </text>
-            <text x={W - PAD_R + 10} y={l.y + 3} textAnchor="start"
-              fontSize="10" fill="var(--fg-4)" fontFamily="Geist Mono, monospace">
-              {Math.round(l.casesAt)}
-            </text>
-          </g>
-        ))}
+    <div className="card usage-daily-breakdown">
+      <div className="usage-daily-breakdown__head">
+        <div style={{ minWidth: 0 }}>
+          <h2 className="usage-daily-breakdown__title">{t.admin.usage.chart.title}</h2>
+          <p className="usage-daily-breakdown__subtitle">{t.admin.usage.chart.subtitle}</p>
+        </div>
+        <div className="usage-daily-breakdown__legend">
+          <UsageLegendSwatch type="bar" color={USAGE_COST_COLOR} label={costHint}/>
+          <UsageLegendSwatch type="line" color={USAGE_CASES_COLOR} label={casesHint}/>
+        </div>
+      </div>
 
-        {/* Axis titles */}
-        <text x={PAD_L - 38} y={PAD_T - 4} textAnchor="start"
-          fontSize="10" fill="var(--fg-3)" fontWeight="500">Cost ($)</text>
-        <text x={W - PAD_R + 38} y={PAD_T - 4} textAnchor="end"
-          fontSize="10" fill="var(--fg-3)" fontWeight="500">Cases</text>
-
-        {/* Bars (cost) */}
-        {data.map((day, i) => {
-          const bandX = PAD_L + i * bandW;
-          const cx = bandX + bandW / 2;
-          const x = cx - barW / 2;
-          const barH = (day.cost / yMaxCost) * innerH;
-          const y = bottom - barH;
-          const isHover = hover?.idx === i;
-          const isSelected = selectedIdx === i;
-          const dim = selectedIdx != null && !isSelected;
-          const handleClick = () => onSelect && onSelect(isSelected ? null : i);
-          return (
-            <g key={i} onClick={handleClick} style={{ cursor:'pointer' }}>
-              <rect x={bandX} y={PAD_T} width={bandW} height={innerH}
-                fill={isSelected ? 'var(--accent-glow)' : 'var(--bg-hover)'}
-                opacity={isSelected ? 0.55 : isHover ? 0.35 : 0}/>
-              <rect x={x} y={y} width={barW} height={Math.max(barH, 0.5)}
-                rx="2" ry="2"
-                fill={isSelected ? '#0891b2' : '#22d3ee'}
-                opacity={dim ? 0.4 : (isHover || isSelected ? 1 : 0.88)}/>
-            </g>
-          );
-        })}
-
-        {/* Cases line (right axis) */}
-        <path d={linePath} fill="none"
-          stroke="#f87171" strokeWidth="1.6"
-          strokeLinecap="round" strokeLinejoin="round" opacity="0.95"/>
-        {linePoints.map((p, i) => (
-          <circle key={i} cx={p.x} cy={p.y} r={hover?.idx === i ? 3.2 : 2.2}
-            fill="var(--bg-2)" stroke="#f87171" strokeWidth="1.4"/>
-        ))}
-
-        {/* Hover guide */}
-        {hover && (
-          <line x1={hover.cx} x2={hover.cx}
-            y1={PAD_T} y2={bottom}
-            stroke="var(--accent)" strokeWidth="1" strokeDasharray="2 3" opacity="0.6"/>
-        )}
-
-        {/* X-axis labels */}
-        {data.map((day, i) => {
-          if (i % tickEvery !== 0 && i !== data.length - 1) return null;
-          const cx = PAD_L + i * bandW + bandW / 2;
-          return (
-            <text key={i} x={cx} y={H - PAD_B + 18} textAnchor="middle"
-              fontSize="10" fill={selectedIdx === i ? 'var(--accent)' : 'var(--fg-3)'}
-              fontFamily="Geist Mono, monospace"
-              fontWeight={selectedIdx === i ? 600 : 400}>
-              {formatBucketShort(day.date, bucket)}
-            </text>
-          );
-        })}
-      </svg>
-
-      {hover && (
-        <UsageTooltip
-          day={data[hover.idx]}
+      {isEmpty ? (
+        <div className="usage-daily-breakdown__empty">
+          <div className="usage-daily-breakdown__empty-inner">
+            <IconLineChart size={32} className="usage-daily-breakdown__empty-icon" aria-hidden="true"/>
+            <p className="usage-daily-breakdown__empty-title">{t.admin.usage.chart.unavailableTitle}</p>
+            <p className="usage-daily-breakdown__empty-desc">{t.admin.usage.chart.unavailableDescription}</p>
+          </div>
+        </div>
+      ) : (
+        <UsageChart
+          data={data}
           bucket={bucket}
-          svgCx={hover.cx}
-          svgTopY={hover.topY}
-          svgW={W}
-          svgH={H}
-          containerRef={containerRef}
+          selectedIdx={selectedIdx}
+          onSelect={onSelect}
+          t={t}
         />
       )}
     </div>
   );
 }
 
-function niceCeil(v) {
-  if (!isFinite(v) || v <= 0) return 1;
-  const exp = Math.pow(10, Math.floor(Math.log10(v)));
-  const f = v / exp;
-  let nf;
-  if (f <= 1) nf = 1;
-  else if (f <= 2) nf = 2;
-  else if (f <= 2.5) nf = 2.5;
-  else if (f <= 5) nf = 5;
-  else nf = 10;
-  return nf * exp;
-}
-
-function formatAxisCost(v) {
-  if (v >= 1000) return `${(v / 1000).toFixed(1)}k`;
-  if (v >= 100) return v.toFixed(0);
-  return v.toFixed(1);
-}
-
-function UsageTooltip({ day, bucket = 'day', svgCx, svgTopY, svgW, svgH, containerRef }) {
-  const ref = React.useRef(null);
-  const [pos, setPos] = React.useState({ left: 0, top: 0, ready: false });
-
-  React.useLayoutEffect(() => {
-    const el = ref.current;
-    const box = containerRef.current?.getBoundingClientRect();
-    if (!el || !box) return;
-    const ratioX = box.width / svgW;
-    const ratioY = box.height / svgH;
-    const anchorX = svgCx * ratioX;
-    const anchorY = svgTopY * ratioY;
-    const tipW = el.offsetWidth;
-    const tipH = el.offsetHeight;
-    let left = anchorX - tipW / 2;
-    let top = anchorY - tipH - 12;
-    left = Math.max(4, Math.min(left, box.width - tipW - 4));
-    if (top < 4) top = anchorY + 18;
-    setPos({ left, top, ready: true });
-  }, [svgCx, svgTopY, svgW, svgH]);
-
-  const costPerK = day.tokens > 0 ? (day.cost / day.tokens) * 1000 : 0;
-
+/** Tooltip — copy of Apolo ChartTooltip (daily-breakdown-chart.tsx) */
+function UsageChartTooltipContent({ active, payload, label, costLabel, casesLabel, casesNote }) {
+  if (!active || !payload?.length) return null;
+  const costItem = payload.find((p) => p.dataKey === 'cost');
+  const cost = costItem?.payload?.costWithMarkup ?? costItem?.value ?? 0;
+  const cases = payload.find((p) => p.dataKey === 'cases')?.value ?? 0;
   return (
-    <div ref={ref} style={{
-      position:'absolute', left: pos.left, top: pos.top,
-      width: 232, padding:'11px 13px',
-      background:'var(--bg)', border:'1px solid var(--line-2)', borderRadius:10,
-      boxShadow:'0 22px 40px -12px rgba(0,0,0,0.55)',
-      pointerEvents:'none', zIndex:5,
-      opacity: pos.ready ? 1 : 0,
-      transition:'opacity .12s ease',
-    }}>
-      <div className="mono" style={{ fontSize:11, color:'var(--fg-3)', letterSpacing:'0.08em', marginBottom:8 }}>
-        {formatBucketLong(day.date, bucket).toUpperCase()}
+    <div className="usage-chart-tooltip">
+      <div className="usage-chart-tooltip__label">{label}</div>
+      <div className="usage-chart-tooltip__row">
+        <span aria-hidden="true" className="usage-daily-breakdown__legend-mark" style={{ backgroundColor: USAGE_COST_COLOR }}/>
+        <span className="usage-chart-tooltip__muted">{costLabel}</span>
+        <span>{formatUsageCurrency(cost)}</span>
       </div>
-      <UsageTipRow color="#22d3ee" label="Cost" value={`$${day.cost.toFixed(2)}`}/>
-      <UsageTipRow color="#f87171" label="Cases" value={day.investigations.toLocaleString()}/>
-      <UsageTipRow color="var(--fg-3)" label="Tokens" value={day.tokens.toLocaleString()}/>
-      <div style={{ height:1, background:'var(--line)', margin:'8px 0 6px' }}/>
-      <div className="mono" style={{ display:'flex', justifyContent:'space-between', fontSize:10.5, color:'var(--fg-4)' }}>
-        <span>cost / 1k tokens</span>
-        <span>${costPerK.toFixed(4)}</span>
+      <div className="usage-chart-tooltip__row">
+        <span aria-hidden="true" className="usage-daily-breakdown__legend-mark is-line" style={{ backgroundColor: USAGE_CASES_COLOR }}/>
+        <span className="usage-chart-tooltip__muted">{casesLabel}</span>
+        <span>{cases}</span>
       </div>
+      <p className="usage-chart-tooltip__note">{casesNote}</p>
     </div>
   );
 }
 
-function UsageTipRow({ color, label, value }) {
+/** ComposedChart — 1:1 Apolo DailyBreakdownChart */
+function UsageChart({ data, bucket = 'day', selectedIdx, onSelect, t }) {
+  const chartData = React.useMemo(() => usageSeriesToChartPoints(data, bucket), [data, bucket]);
+  const selectedBucketStart = selectedIdx != null ? chartData[selectedIdx]?.bucketStart : null;
+  const maxCost = chartData.reduce((max, point) => Math.max(max, point.cost), 0);
+  const costAxisDecimals = maxCost < 10 ? 2 : 0;
+  const xAxisInterval = chartData.length <= 12 ? 0 : Math.max(1, Math.floor(chartData.length / 8));
+  const compactXLabels = chartData.length > 12;
+  const canSelectBucket = Boolean(onSelect);
+  const axisTickStyle = { fill: 'currentColor', fontSize: 11 };
+  const chart = t.admin.usage.chart;
+
+  const handleBarClick = (barData) => {
+    if (!barData?.payload || !onSelect) return;
+    const idx = chartData.findIndex((p) => p.bucketStart === barData.payload.bucketStart);
+    if (idx < 0) return;
+    onSelect(selectedIdx === idx ? null : idx);
+  };
+
   return (
-    <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'3px 0' }}>
-      <span style={{ display:'inline-flex', alignItems:'center', gap:8 }}>
-        <span style={{ width:8, height:8, borderRadius:2, background:color }}/>
-        <span style={{ fontSize:12, color:'var(--fg-2)' }}>{label}</span>
-      </span>
-      <span className="mono" style={{ fontSize:12, fontWeight:600, color:'var(--fg)' }}>{value}</span>
+    <div className="usage-daily-breakdown__chart-wrap">
+      <ResponsiveContainer width="100%" height="100%">
+        <ComposedChart
+          data={chartData}
+          margin={{
+            top: 8,
+            right: 12,
+            bottom: compactXLabels ? 40 : 10,
+            left: 0,
+          }}
+        >
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false}/>
+          <XAxis
+            dataKey="label"
+            tick={axisTickStyle}
+            tickLine={false}
+            axisLine={false}
+            interval={xAxisInterval}
+            minTickGap={compactXLabels ? 28 : 12}
+            angle={compactXLabels ? -35 : 0}
+            textAnchor={compactXLabels ? 'end' : 'middle'}
+            height={compactXLabels ? 44 : 28}
+          />
+          <YAxis
+            yAxisId="cost"
+            tick={axisTickStyle}
+            tickLine={false}
+            axisLine={false}
+            tickFormatter={(v) => `$${Number(v).toFixed(costAxisDecimals)}`}
+            width={48}
+          />
+          <YAxis
+            yAxisId="cases"
+            orientation="right"
+            tick={axisTickStyle}
+            tickLine={false}
+            axisLine={false}
+            allowDecimals={false}
+            width={32}
+          />
+          <Tooltip
+            cursor={{ fill: 'color-mix(in oklch, var(--accent) 35%, transparent)' }}
+            content={
+              <UsageChartTooltipContent
+                costLabel={chart.costSeries}
+                casesLabel={chart.casesSeries}
+                casesNote={chart.casesTooltipNote}
+              />
+            }
+          />
+          <Bar
+            yAxisId="cost"
+            dataKey="cost"
+            fill={USAGE_COST_COLOR}
+            radius={[3, 3, 0, 0]}
+            maxBarSize={28}
+            onClick={canSelectBucket ? handleBarClick : undefined}
+          >
+            {chartData.map((point) => {
+              const isSelected = point.bucketStart === selectedBucketStart;
+              return (
+                <Cell
+                  key={point.bucketStart}
+                  cursor={canSelectBucket ? 'pointer' : undefined}
+                  fill={isSelected ? USAGE_COST_SELECTED : USAGE_COST_COLOR}
+                  stroke={isSelected ? 'var(--foreground)' : undefined}
+                  strokeWidth={isSelected ? 1 : 0}
+                />
+              );
+            })}
+          </Bar>
+          <Line
+            yAxisId="cases"
+            type="monotone"
+            dataKey="cases"
+            stroke={USAGE_CASES_COLOR}
+            strokeWidth={2}
+            dot={{ r: 2.5, fill: USAGE_CASES_COLOR, strokeWidth: 0 }}
+            activeDot={{ r: 4 }}
+            isAnimationActive={false}
+          />
+        </ComposedChart>
+      </ResponsiveContainer>
     </div>
   );
-}
-
-function formatTokens(n) {
-  if (n >= 1_000_000) return (n / 1_000_000).toFixed(n >= 10_000_000 ? 0 : 1) + 'M';
-  if (n >= 1_000) return (n / 1_000).toFixed(n >= 10_000 ? 0 : 1) + 'k';
-  return Math.round(n).toString();
 }
 
 function formatDayShort(d) {
@@ -781,11 +769,12 @@ const USAGE_TOP_USERS = [
   { initials:'EB', name:'Ezra Bahar',        team:'Security'      },
 ];
 
-const USAGE_USER_COLORS = [
-  'var(--accent)', 'var(--sev-ok)', 'var(--sev-crit)', 'var(--warning)',
-  'var(--sev-med)', 'var(--sev-low)', 'var(--sev-info)', 'var(--fg-2)',
-  'var(--accent-2)', 'var(--sev-high)',
-];
+function initialsFromName(name) {
+  const parts = (name || '').trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '?';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return `${parts[0][0] || ''}${parts[parts.length - 1][0] || ''}`.toUpperCase();
+}
 
 function buildTopUsers(days) {
   // Aggregate the supplied days into per-user totals using a deterministic
@@ -827,57 +816,47 @@ function buildTopUsers(days) {
   return totals.slice(0, 5);
 }
 
-function UsageTopUsers({ users, scopeLabel, t }) {
+// Top consumidores — mirrors chia/.../top-users-panel.tsx
+function UsageTopUsers({ users, scopeLabel, t, locale }) {
   const top = users.slice(0, 5);
   const hasData = top.some(u => u.cost > 0 || u.tokens > 0);
+
   return (
-    <div className="card" style={{ display:'flex', flexDirection:'column', minHeight:0 }}>
-      <div style={{ padding:'10px 16px 8px', borderBottom:'1px solid var(--line)' }}>
-        <div style={{ fontSize:13, fontWeight:600 }}>{t.admin.usage.topUsers.title}</div>
-        <div style={{ fontSize:11, color:'var(--fg-3)', marginTop:1 }}>
+    <div className="usage-top-users card" aria-live="polite">
+      <div className="usage-panel-header">
+        <h2 className="usage-panel-header__title">{t.admin.usage.topUsers.title}</h2>
+        <p className="usage-panel-header__subtitle">
           {t.admin.usage.topUsers.subtitle.replace('{period}', scopeLabel)}
-        </div>
+        </p>
       </div>
-      <div style={{ padding:'4px 6px 6px', overflowY:'auto' }}>
-        {!hasData ? (
-          <div style={{ padding:'24px 16px', textAlign:'center' }}>
-            <div style={{ fontSize:12.5, fontWeight:600, color:'var(--fg-2)' }}>{t.admin.usage.topUsers.unavailableTitle}</div>
-            <div style={{ fontSize:11, color:'var(--fg-3)', marginTop:6 }}>{t.admin.usage.topUsers.unavailableDescription}</div>
+
+      {!hasData ? (
+        <div className="usage-top-users-empty">
+          <div className="usage-top-users-empty__icon">
+            <IconUsersRound size={24}/>
           </div>
-        ) : top.map((u, i) => {
-          const color = USAGE_USER_COLORS[i % USAGE_USER_COLORS.length];
-          return (
-            <div key={u.initials} style={{
-              display:'grid',
-              gridTemplateColumns:'16px 24px minmax(0, 1fr) auto',
-              alignItems:'center', gap:9,
-              padding:'4px 10px', borderRadius:8,
-            }}>
-              <div className="mono" style={{ fontSize:10.5, color:'var(--fg-3)', textAlign:'right' }}>
-                {i + 1}
+          <p className="usage-top-users-empty__title">{t.admin.usage.topUsers.unavailableTitle}</p>
+          <p className="usage-top-users-empty__desc">{t.admin.usage.topUsers.unavailableDescription}</p>
+        </div>
+      ) : (
+        <div className="usage-top-users-list">
+          {top.map(u => (
+            <div key={`${u.initials}-${u.name}`} className="usage-top-users-row">
+              <div className="usage-top-users-avatar" aria-hidden="true">
+                {u.initials || initialsFromName(u.name)}
               </div>
-              <div style={{
-                width:24, height:24, borderRadius:'50%',
-                background:`color-mix(in oklch, ${color} 18%, transparent)`,
-                border:`1px solid color-mix(in oklch, ${color} 45%, transparent)`,
-                color, fontSize:10, fontWeight:600,
-                display:'inline-flex', alignItems:'center', justifyContent:'center',
-              }}>{u.initials}</div>
-              <div style={{ minWidth:0 }}>
-                <div style={{ fontSize:12, fontWeight:500, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', lineHeight:1.2 }}>{u.name}</div>
-                <div className="mono" style={{ fontSize:10, color:'var(--fg-3)', marginTop:1, display:'flex', gap:6, flexWrap:'wrap', lineHeight:1.2 }}>
-                  <span>{u.cases} {t.admin.usage.topUsers.casesShort}</span>
-                  <span>·</span>
-                  <span>{formatTokens(u.tokens)} {t.admin.usage.topUsers.tokensShort}</span>
-                </div>
+              <div className="usage-top-users-body">
+                <span className="usage-top-users-name">{u.name}</span>
+                <p className="usage-top-users-meta">
+                  {formatInteger(u.cases, locale)} {t.admin.usage.topUsers.casesShort} ·{' '}
+                  {formatCompactNumber(u.tokens, locale)} {t.admin.usage.topUsers.tokensShort}
+                </p>
               </div>
-              <div className="mono" style={{ fontSize:11.5, fontWeight:600, textAlign:'right', whiteSpace:'nowrap' }}>
-                ${u.cost.toFixed(2)}
-              </div>
+              <p className="usage-top-users-cost">{formatUsageCurrency(u.cost)}</p>
             </div>
-          );
-        })}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -923,14 +902,40 @@ function buildUsageDayCases(day) {
   return out;
 }
 
-function formatUsageCurrency(n) {
-  return '$' + (typeof n === 'number' ? n : parseFloat(n) || 0).toFixed(2);
+/** Resolve EVENTS array index for top-cases row (Apolo alert detail link). */
+function findEventIndexForCase(c) {
+  const events = typeof EVENTS !== 'undefined' ? EVENTS : [];
+  if (!events.length) return null;
+  const caseId = c.case_id ?? c.caseId;
+  if (caseId != null) {
+    const byCase = events.findIndex(e => e.case_id === caseId);
+    if (byCase >= 0) return byCase;
+  }
+  const name = c.alert_name || c.title;
+  if (name) {
+    const byName = events.findIndex(e => e.alert_name === name || e.title === name);
+    if (byName >= 0) return byName;
+  }
+  return null;
 }
 
-function UsageDrilldown({ day, rangeData, rangeTotals, rangeLabel, bucket = 'day' }) {
-  const { t } = useI18n();
+function UsageTopCasesEventCell({ c }) {
+  const label = c.alert_name || c.title;
+  const idx = findEventIndexForCase(c);
+  if (idx == null) {
+    return <span className="usage-top-cases-event-text">{label}</span>;
+  }
+  return (
+    <a href={`#/events/${idx}`} className="usage-top-cases-event-link">
+      {label}
+    </a>
+  );
+}
+
+function UsageDrilldown({ day, rangeData, rangeTotals, scopePeriodLabel, bucket = 'day' }) {
+  const { lang, t } = useI18n();
+  const locale = usageLocale(lang);
   const isDay = day != null;
-  const periodLabel = isDay ? formatBucketLong(day.date, bucket) : rangeLabel;
 
   const cases = React.useMemo(() => {
     const all = isDay
@@ -943,8 +948,8 @@ function UsageDrilldown({ day, rangeData, rangeTotals, rangeLabel, bucket = 'day
   const summaryTokens = cases.reduce((s, c) => s + c.tokens, 0);
   const summaryCost = cases.reduce((s, c) => s + c.cost, 0);
   const summaryText = t.admin.usage.topCases.summary
-    .replace('{count}', String(cases.length))
-    .replace('{tokens}', summaryTokens.toLocaleString())
+    .replace('{count}', formatInteger(cases.length, locale))
+    .replace('{tokens}', formatCompactNumber(summaryTokens, locale))
     .replace('{cost}', formatUsageCurrency(summaryCost));
 
   const cols = t.admin.usage.topCases.columns;
@@ -955,13 +960,15 @@ function UsageDrilldown({ day, rangeData, rangeTotals, rangeLabel, bucket = 'day
       border: isDay ? '1px solid var(--accent-2)' : undefined,
       boxShadow: isDay ? '0 0 0 3px var(--accent-glow)' : undefined,
     }}>
-      <div style={{ padding: '12px 18px', borderBottom: '1px solid var(--line)' }}>
-        <div style={{ fontSize: 13, fontWeight: 600 }}>{t.admin.usage.topCases.title}</div>
-        <div style={{ fontSize: 11, color: 'var(--fg-3)', marginTop: 2 }}>
-          {t.admin.usage.topCases.subtitle.replace('{period}', periodLabel)}
+      <div className="usage-top-cases-header">
+        <div style={{ minWidth: 0 }}>
+          <h2 className="usage-top-cases-header__title">{t.admin.usage.topCases.title}</h2>
+          <p className="usage-top-cases-header__subtitle">
+            {t.admin.usage.topCases.subtitle.replace('{period}', scopePeriodLabel)}
+          </p>
         </div>
         {cases.length > 0 && (
-          <div className="mono" style={{ fontSize: 11, color: 'var(--fg-3)', marginTop: 6 }}>{summaryText}</div>
+          <p className="usage-top-cases-header__summary">{summaryText}</p>
         )}
       </div>
       {cases.length === 0 ? (
@@ -983,12 +990,14 @@ function UsageDrilldown({ day, rangeData, rangeTotals, rangeLabel, bucket = 'day
           <tbody>
             {cases.map((c, i) => (
               <tr key={i} style={{ borderTop: '1px solid var(--line)' }}>
-                <td className="mono" style={usageDrillTd}>#{c.case_id || c.caseId}</td>
-                <td style={usageDrillTd}>{c.alert_name || c.title}</td>
+                <td className="mono" style={{ ...usageDrillTd, paddingLeft: 20, fontSize: '0.75rem', fontWeight: 600 }}>#{c.case_id || c.caseId}</td>
+                <td className="usage-top-cases-event-cell" style={usageDrillTd}>
+                  <UsageTopCasesEventCell c={c}/>
+                </td>
                 <td style={usageDrillTd}>
                   <CaseStatusBadge caseStatus={c.case_status} status={c.caseStatus}/>
                 </td>
-                <td className="mono" style={{ ...usageDrillTd, textAlign: 'right', color: 'var(--fg-2)' }}>{c.tokens.toLocaleString()}</td>
+                <td className="mono" style={{ ...usageDrillTd, textAlign: 'right', color: 'var(--fg-2)' }}>{formatInteger(c.tokens, locale)}</td>
                 <td className="mono" style={{ ...usageDrillTd, fontWeight: 600, textAlign: 'right' }}>{formatUsageCurrency(c.cost)}</td>
               </tr>
             ))}

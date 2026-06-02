@@ -1,4 +1,4 @@
-// Administration shell — Apolo-aligned sidebar (Manage Users + Usage only).
+// Administration shell — mirrors chia/src/apolo/components/admin/admin-sidebar.tsx
 
 function AdministrationPage({ section, setSection, currentUser }) {
   const { t } = useI18n();
@@ -14,21 +14,12 @@ function AdministrationPage({ section, setSection, currentUser }) {
     });
   };
 
+  const toggleLabel = collapsed ? t.admin.sidebar.expand : t.admin.sidebar.collapse;
+
+  // Same icons as Apolo: Users, BarChart3 (lucide-react in admin-sidebar.tsx)
   const items = [
-    { key: 'users', label: t.admin.sidebar.manageUsers, icon: (
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
-        <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-      </svg>
-    )},
-    { key: 'usage', label: t.admin.sidebar.usageAndCosts, icon: (
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-        <line x1="3" y1="20" x2="21" y2="20"/>
-        <line x1="6" y1="20" x2="6" y2="14"/>
-        <line x1="12" y1="20" x2="12" y2="4"/>
-        <line x1="18" y1="20" x2="18" y2="10"/>
-      </svg>
-    )},
+    { key: 'users', label: t.admin.sidebar.manageUsers, Icon: IconUsers },
+    { key: 'usage', label: t.admin.sidebar.usageAndCosts, Icon: IconBarChart3 },
   ];
 
   return (
@@ -37,47 +28,80 @@ function AdministrationPage({ section, setSection, currentUser }) {
         width: collapsed ? 56 : 240,
         flexShrink: 0,
         borderRight: '1px solid var(--border)',
-        padding: collapsed ? '22px 8px' : '22px 14px',
+        padding: collapsed ? '24px 8px' : '24px 12px',
         background: 'color-mix(in oklch, var(--background) 60%, transparent)',
-        flexDirection: 'column', gap: 4,
+        flexDirection: 'column',
         transition: 'width .2s ease',
       }}>
         <div style={{
-          display: 'flex', alignItems: 'center', justifyContent: collapsed ? 'center' : 'space-between',
-          padding: collapsed ? '4px 0 10px' : '4px 10px 10px',
+          display: 'flex', alignItems: 'center',
+          justifyContent: collapsed ? 'center' : 'space-between',
+          padding: collapsed ? '0 0 12px' : '0 12px 12px',
         }}>
           {!collapsed && (
-            <div style={{
-              fontSize: 10.5, color: 'var(--fg-4)', letterSpacing: '0.14em',
+            <p style={{
+              margin: 0,
+              fontSize: '0.75rem',
+              fontWeight: 600,
+              letterSpacing: '0.05em',
               textTransform: 'uppercase',
-            }} className="mono">{t.nav.administration}</div>
+              color: 'var(--muted-foreground)',
+            }}>{t.admin.sidebar.title}</p>
           )}
-          <button onClick={toggleCollapsed} title={collapsed ? t.admin.sidebar.expand : t.admin.sidebar.collapse} style={{
-            width: 28, height: 28, borderRadius: 6, border: '1px solid var(--line)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--fg-3)',
-          }}>
-            <IconChevron size={12} style={{ transform: collapsed ? 'rotate(-90deg)' : 'rotate(90deg)' }}/>
+          <button
+            type="button"
+            onClick={toggleCollapsed}
+            aria-label={toggleLabel}
+            aria-expanded={!collapsed}
+            title={toggleLabel}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: 28,
+              height: 28,
+              borderRadius: 'var(--radius-sm)',
+              border: 'none',
+              background: 'transparent',
+              color: 'var(--muted-foreground)',
+              cursor: 'pointer',
+              transition: 'background 0.15s, color 0.15s',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'var(--accent)'; e.currentTarget.style.color = 'var(--accent-foreground)'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--muted-foreground)'; }}
+          >
+            {collapsed ? <IconChevronRight size={16}/> : <IconChevronLeft size={16}/>}
           </button>
         </div>
-        {items.map(it => {
-          const active = section === it.key;
-          return (
-            <button key={it.key}
-              onClick={() => setSection(it.key)}
-              title={collapsed ? it.label : undefined}
-              className={'btn btn--ghost btn--sm' + (active ? ' is-active' : '')}
-              style={{
-                display: 'flex', alignItems: 'center', gap: collapsed ? 0 : 10,
-                justifyContent: collapsed ? 'center' : 'flex-start',
-                width: collapsed ? 36 : '100%',
-                padding: collapsed ? '9px 0' : '9px 10px',
-              }}
-            >
-              {it.icon}
-              {!collapsed && <span style={{ flex: 1 }}>{it.label}</span>}
-            </button>
-          );
-        })}
+        <nav style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          {items.map(({ key, label, Icon }) => {
+            const active = section === key;
+            return (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setSection(key)}
+                title={collapsed ? label : undefined}
+                aria-label={collapsed ? label : undefined}
+                className={'btn btn--ghost btn--sm' + (active ? ' is-active' : '')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: collapsed ? 'center' : 'flex-start',
+                  gap: collapsed ? 0 : 12,
+                  width: collapsed ? 36 : '100%',
+                  height: collapsed ? 36 : undefined,
+                  alignSelf: collapsed ? 'center' : undefined,
+                  padding: collapsed ? 0 : '8px 12px',
+                  color: active ? undefined : 'var(--muted-foreground)',
+                }}
+              >
+                <Icon size={16} style={{ flexShrink: 0 }}/>
+                {!collapsed && <span style={{ flex: 1, textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>}
+              </button>
+            );
+          })}
+        </nav>
       </aside>
       <main className="layout-page" style={{ flex: 1, minWidth: 0, paddingTop: 0, paddingBottom: 0 }}>
         {section === 'users' && <UsersPage currentUser={currentUser}/>}
