@@ -50,6 +50,7 @@ const IconCheckCircle2 = (p) => <Icon {...p} d={<>
   <path d="m9 12 2 2 4-4"/>
 </>} />;
 const IconEye = (p) => <Icon {...p} d={<><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></>} />;
+const IconEyeOff = (p) => <Icon {...p} d={<><path d="M10.733 5.076 10.2 5.65A7 7 0 0 0 5 12c0 .65.09 1.28.26 1.88l-.74.74"/><path d="M2 2l20 20"/><path d="M14.12 14.12A3 3 0 0 1 9.88 9.88"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c4.48 0 8.24 3.04 10 7.5a9.17 9.17 0 0 1-1.56 2.38"/><path d="M6.61 6.61A9.12 9.12 0 0 0 2 12c1.76 4.46 5.52 7.5 10 7.5 1.05 0 2.05-.16 3-.45"/></>} />;
 const IconAlert = (p) => <Icon {...p} d={<><path d="M10.3 3.86a2 2 0 0 1 3.4 0l8.2 14.14A2 2 0 0 1 20.2 21H3.8a2 2 0 0 1-1.7-3L10.3 3.86z"/><path d="M12 9v5"/><path d="M12 17.5v.01"/></>} />;
 const IconTriangle = (p) => <Icon {...p} d={'M13.73 4a2 2 0 0 0-3.46 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z'} />;
 const IconChevronDown = (p) => <Icon {...p} d={'m6 9 6 6 6-6'} />;
@@ -60,6 +61,7 @@ const IconShieldCheck = (p) => <Icon {...p} d={<>
 </>} />;
 const IconActivity = (p) => <Icon {...p} d="M22 12h-4l-3 9L9 3l-3 9H2" />;
 const IconClose = (p) => <Icon {...p} d={<><path d="M18 6 6 18"/><path d="m6 6 12 12"/></>} />;
+const IconXCircle = (p) => <Icon {...p} d={<><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></>} />;
 const IconChevron = (p) => <Icon {...p} d={'m9 18 6-6-6-6'} />;
 const IconSparkle = (p) => <Icon {...p} d={<>
   <path d="M12 3v4"/><path d="M12 17v4"/>
@@ -180,8 +182,8 @@ const IconGoogle = ({ size = 18 }) => (
 // Expose to other files (window + globalThis for Babel standalone script order).
 const ICON_EXPORTS = {
   Icon, IconPulse, IconBell, IconSettings, IconSearch, IconFilter, IconArchive, IconPlus,
-  IconLogout, IconHeadset, IconArrowUpDown, IconArrowUp, IconArrowDown, IconCheck, IconCheckCircle2, IconEye, IconAlert, IconTriangle, IconChevronDown, IconHash, IconShieldCheck, IconActivity,
-  IconClose, IconChevron, IconSparkle, IconCopy, IconLink, IconMaximize, IconMinimize, IconMinimize2, IconExternalLink, IconTerminal,
+  IconLogout, IconHeadset, IconArrowUpDown, IconArrowUp, IconArrowDown, IconCheck, IconCheckCircle2, IconEye, IconEyeOff, IconAlert, IconTriangle, IconChevronDown, IconHash, IconShieldCheck, IconActivity,
+  IconClose, IconXCircle, IconChevron, IconSparkle, IconCopy, IconLink, IconMaximize, IconMinimize, IconMinimize2, IconExternalLink, IconTerminal,
   IconBriefcase, IconMessageSquare, IconDatabase, IconClock, IconCalendar, IconUsers, IconThumbsUp, IconThumbsDown, IconPenLine, IconGripVertical,
   IconLifeBuoy, IconRotateCcw, IconFileText, IconShare, IconUser, IconUserX, IconSend, IconBrain, IconBrainCircuit, IconMoreVertical, IconSun, IconMoon,
   IconInvestigate, IconGoogle,

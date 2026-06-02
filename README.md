@@ -19,7 +19,7 @@ Open http://127.0.0.1:5173 — sign in with any credentials (mock auth).
 | `#/login` | Login |
 | `#/events` | Events dashboard |
 | `#/events/:index` | Event detail modal |
-| `#/admin/manage-users` | Manage Users |
+| `#/admin/users` | Manage Users |
 | `#/admin/usage` | Usage & Costs |
 
 ## Layout

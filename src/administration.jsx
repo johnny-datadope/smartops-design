@@ -15,13 +15,13 @@ function AdministrationPage({ section, setSection, currentUser }) {
   };
 
   const items = [
-    { key: 'users', label: t.admin.manageUsers, icon: (
+    { key: 'users', label: t.admin.sidebar.manageUsers, icon: (
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
         <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
         <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
       </svg>
     )},
-    { key: 'usage', label: t.admin.usage, icon: (
+    { key: 'usage', label: t.admin.sidebar.usageAndCosts, icon: (
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
         <line x1="3" y1="20" x2="21" y2="20"/>
         <line x1="6" y1="20" x2="6" y2="14"/>
@@ -33,13 +33,13 @@ function AdministrationPage({ section, setSection, currentUser }) {
 
   return (
     <div data-screen-label="04 Administration" style={{ display: 'flex', minHeight: 'calc(100vh - 58px)' }}>
-      <aside style={{
+      <aside className="admin-sidebar" style={{
         width: collapsed ? 56 : 240,
         flexShrink: 0,
-        borderRight: '1px solid var(--line)',
+        borderRight: '1px solid var(--border)',
         padding: collapsed ? '22px 8px' : '22px 14px',
-        background: 'var(--bg-2)',
-        display: 'flex', flexDirection: 'column', gap: 4,
+        background: 'color-mix(in oklch, var(--background) 60%, transparent)',
+        flexDirection: 'column', gap: 4,
         transition: 'width .2s ease',
       }}>
         <div style={{

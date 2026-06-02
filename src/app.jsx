@@ -2,10 +2,10 @@
 //
 // URL formats:
 //   #/login                #/events            #/events/:index
-//   #/admin                #/admin/:section    (manage-users|usage)
+//   #/admin                #/admin/:section    (users|usage)
 
-const ADMIN_SLUG_TO_SECTION = { 'manage-users': 'users', 'usage': 'usage' };
-const ADMIN_SECTION_TO_SLUG = { 'users': 'manage-users', 'usage': 'usage' };
+const ADMIN_SLUG_TO_SECTION = { 'users': 'users', 'manage-users': 'users', 'usage': 'usage' };
+const ADMIN_SECTION_TO_SLUG = { 'users': 'users', 'usage': 'usage' };
 
 function parseHash(hash) {
   const raw = (hash || '').replace(/^#\/?/, '');
@@ -26,7 +26,7 @@ function parseHash(hash) {
 function buildHash({ route, detailId, section }) {
   if (route === 'login') return '#/login';
   if (route === 'admin') {
-    const slug = ADMIN_SECTION_TO_SLUG[section] || 'manage-users';
+    const slug = ADMIN_SECTION_TO_SLUG[section] || 'users';
     return `#/admin/${slug}`;
   }
   if (route === 'events') return detailId != null ? `#/events/${detailId}` : '#/events';

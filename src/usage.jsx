@@ -137,12 +137,21 @@ function generateUsageData(startDate, endDate, bucket) {
   return out;
 }
 
-const USAGE_RANGES = [
-  { key: 'today', label: 'Today',        today: true },
-  { key: '7d',    label: 'Last 7 days',  days: 7  },
-  { key: '30d',   label: 'Last 30 days', days: 30 },
-  { key: '90d',   label: 'Last 90 days', days: 90 },
+const USAGE_RANGE_PRESETS = [
+  { key: 'today', today: true },
+  { key: '7d', days: 7 },
+  { key: '30d', days: 30 },
+  { key: '90d', days: 90 },
 ];
+
+function usageRangeLabel(t, key) {
+  const p = t.admin.usage.period;
+  if (key === 'today') return p.today;
+  if (key === '7d') return p.last7Days;
+  if (key === '30d') return p.last30Days;
+  if (key === '90d') return p.last90Days;
+  return key;
+}
 
 // ---- date helpers (local TZ, no UTC drift) ----
 
@@ -194,7 +203,7 @@ function UsageMetricsPage() {
       end.setHours(23, 59, 59, 999);
       return { startDate: startOfDay(customRange.from), endDate: end };
     }
-    const cfg = USAGE_RANGES.find(r => r.key === range);
+    const cfg = USAGE_RANGE_PRESETS.find(r => r.key === range);
     if (cfg?.today) {
       const end = new Date(now);
       end.setMinutes(0, 0, 0);
@@ -238,8 +247,8 @@ function UsageMetricsPage() {
     if (range === 'custom' && customRange) {
       return `${formatDMY(customRange.from)} → ${formatDMY(customRange.to)}`;
     }
-    return USAGE_RANGES.find(r => r.key === range)?.label || 'Selected range';
-  }, [range, customRange]);
+    return usageRangeLabel(t, range);
+  }, [range, customRange, t]);
 
   const focusDay = drillIdx != null ? data[drillIdx] : null;
   const topUsers = React.useMemo(
@@ -252,10 +261,13 @@ function UsageMetricsPage() {
 
   return (
     <div className="layout-page" data-screen-label="05 Usage & Costs">
-      <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:20 }}>
+      <p className="admin-mobile-label" style={{ fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--muted-foreground)', margin: 0 }}>
+        {t.admin.sidebar.title}
+      </p>
+      <div className="usage-header">
         <div>
-          <h1 style={{ fontSize:'1.75rem', fontWeight:700, letterSpacing:'-0.02em', margin:0 }}>{t.admin.usageTitle}</h1>
-          <div style={{ fontSize:'0.875rem', color:'var(--muted-foreground)', marginTop:4 }}>{t.admin.usageSubtitle}</div>
+          <h1 className="users-title" style={{ fontWeight:700, letterSpacing:'-0.02em', margin:0 }}>{t.admin.usage.title}</h1>
+          <div className="users-subtitle" style={{ color:'var(--muted-foreground)', marginTop:4 }}>{t.admin.usage.subtitle}</div>
         </div>
         <UsageRangePicker
           range={range}
@@ -264,42 +276,42 @@ function UsageMetricsPage() {
         />
       </div>
 
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:12 }}>
+      <div className="usage-kpi-grid">
         <UsageSummary
-          label={t.admin.usage.totalCost}
+          label={t.admin.usage.kpi.totalCost}
           value={`$${totals.cost.toFixed(2)}`}
-          sub={t.admin.usage.avgPerDay.replace('{value}', `$${avg.cost.toFixed(2)}`)}
-          accent="var(--sev-crit)"
+          sub={t.admin.usage.kpi.averagePerDay.replace('{value}', `$${avg.cost.toFixed(2)}`)}
+          iconBg="color-mix(in srgb, #f43f5e 10%, transparent)" iconColor="#fb7185"
           icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v20"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>}
         />
         <UsageSummary
-          label={t.admin.usage.tokensConsumed}
+          label={t.admin.usage.kpi.tokensConsumed}
           value={formatTokens(totals.tokens)}
-          sub={t.admin.usage.avgPerDay.replace('{value}', formatTokens(avg.tokens))}
-          accent="var(--sev-ok)"
+          sub={t.admin.usage.kpi.averagePerDay.replace('{value}', formatTokens(avg.tokens))}
+          iconBg="color-mix(in srgb, #10b981 10%, transparent)" iconColor="#34d399"
           icon={<IconSparkle size={16}/>}
         />
         <UsageSummary
-          label={t.admin.usage.cases}
+          label={t.admin.usage.kpi.cases}
           value={totals.investigations.toLocaleString()}
-          sub={t.admin.usage.avgPerDay.replace('{value}', avg.investigations.toFixed(1))}
-          accent="var(--accent)"
-          icon={<IconInvestigate size={16} active/>}
+          sub={t.admin.usage.kpi.averagePerDay.replace('{value}', avg.investigations.toFixed(1))}
+          iconBg="color-mix(in srgb, #06b6d4 10%, transparent)" iconColor="#22d3ee"
+          icon={<IconActivity size={16}/>}
         />
       </div>
 
-      <div style={{ display:'grid', gridTemplateColumns:'minmax(0, 1fr) 320px', gap:12, alignItems:'start' }}>
+      <div className="usage-chart-grid">
         <div className="card" style={{ padding:'18px 20px 22px' }}>
           <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:14, gap:16, flexWrap:'wrap' }}>
             <div>
-              <div style={{ fontSize:13.5, fontWeight:600 }}>{t.admin.usage.dailyBreakdown}</div>
+              <div style={{ fontSize:13.5, fontWeight:600 }}>{t.admin.usage.chart.title}</div>
               <div style={{ fontSize:11.5, color:'var(--fg-3)', marginTop:2 }}>
-                {t.admin.usage.chartHint}
+                {t.admin.usage.chart.subtitle}
               </div>
             </div>
             <div style={{ display:'flex', gap:14, alignItems:'center', flexWrap:'wrap' }}>
-              <UsageLegendDot color="var(--accent)" label={t.admin.usage.costAxis + ' · left axis'}/>
-              <UsageLegendLine color="var(--sev-crit)" label={t.admin.usage.casesAxis + ' · right axis'}/>
+              <UsageLegendDot color="#22d3ee" label={t.admin.usage.chart.costSeries + ' · ' + t.admin.usage.chart.leftAxisHint}/>
+              <UsageLegendLine color="#f87171" label={t.admin.usage.chart.casesSeries + ' · ' + t.admin.usage.chart.rightAxisHint}/>
             </div>
           </div>
           <UsageChart
@@ -310,7 +322,7 @@ function UsageMetricsPage() {
             onSelect={setDrillIdx}
           />
         </div>
-        <UsageTopUsers users={topUsers} scopeLabel={focusDay ? formatBucketLong(focusDay.date, bucket) : rangeLabel}/>
+        <UsageTopUsers users={topUsers} scopeLabel={focusDay ? formatBucketLong(focusDay.date, bucket) : rangeLabel} t={t}/>
       </div>
 
       <UsageDrilldown
@@ -319,13 +331,13 @@ function UsageMetricsPage() {
         rangeTotals={totals}
         rangeLabel={rangeLabel}
         bucket={bucket}
-        onClose={() => setDrillIdx(null)}
       />
     </div>
   );
 }
 
 function UsageRangePicker({ range, customRange, onChange }) {
+  const { t } = useI18n();
   const [open, setOpen] = React.useState(false);
   const wrapRef = React.useRef(null);
 
@@ -362,7 +374,7 @@ function UsageRangePicker({ range, customRange, onChange }) {
   const valid = from && to && fromISODate(from) <= fromISODate(to);
   const customLabel = isCustom && customRange
     ? `${formatDMY(customRange.from)} → ${formatDMY(customRange.to)}`
-    : 'Custom';
+    : t.admin.usage.period.custom;
 
   const apply = () => {
     if (!valid) return;
@@ -373,10 +385,10 @@ function UsageRangePicker({ range, customRange, onChange }) {
   return (
     <div ref={wrapRef} style={{ position:'relative', display:'inline-flex' }}>
       <div style={{
-        display:'inline-flex', gap:2, padding:3, borderRadius:9,
+        display:'inline-flex', flexWrap:'wrap', gap:2, padding:3, borderRadius:9,
         background:'var(--bg-2)', border:'1px solid var(--line)',
       }}>
-        {USAGE_RANGES.map(r => {
+        {USAGE_RANGE_PRESETS.map(r => {
           const active = !isCustom && r.key === range;
           return (
             <button key={r.key} onClick={() => onChange({ key: r.key, customRange: null })} style={{
@@ -386,10 +398,10 @@ function UsageRangePicker({ range, customRange, onChange }) {
               color: active ? 'var(--fg)' : 'var(--fg-2)',
               fontSize:12, fontWeight: active ? 600 : 500,
               transition:'all .12s',
-            }}>{r.label}</button>
+            }}>{usageRangeLabel(t, r.key)}</button>
           );
         })}
-        <button onClick={() => setOpen(o => !o)} title="Custom range" style={{
+        <button onClick={() => setOpen(o => !o)} title={t.admin.usage.period.custom} style={{
           padding:'6px 12px', borderRadius:6,
           background: isCustom ? 'var(--bg-3)' : 'transparent',
           border: isCustom ? '1px solid var(--line-2)' : '1px solid transparent',
@@ -415,28 +427,28 @@ function UsageRangePicker({ range, customRange, onChange }) {
           boxShadow:'0 22px 40px -12px rgba(0,0,0,0.55)',
         }}>
           <div style={{ fontSize:12, color:'var(--fg-3)', marginBottom:10, letterSpacing:'0.02em' }}>
-            Custom range
+            {t.admin.usage.period.selectRange}
           </div>
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:10 }}>
             <label style={pickerLabelStyle}>
-              From
+              {t.admin.usage.period.startDate}
               <input type="date" value={from} max={to || todayISO}
                 onChange={e => setFrom(e.target.value)} style={pickerInputStyle}/>
             </label>
             <label style={pickerLabelStyle}>
-              To
+              {t.admin.usage.period.endDate}
               <input type="date" value={to} min={from} max={todayISO}
                 onChange={e => setTo(e.target.value)} style={pickerInputStyle}/>
             </label>
           </div>
           {!valid && (
             <div style={{ fontSize:11, color:'var(--sev-crit)', marginBottom:10 }}>
-              "From" must be on or before "To".
+              {t.admin.usage.period.startDate} → {t.admin.usage.period.endDate}
             </div>
           )}
           <div style={{ display:'flex', justifyContent:'flex-end', gap:8 }}>
-            <button onClick={() => setOpen(false)} style={pickerSecondaryStyle}>Cancel</button>
-            <button onClick={apply} disabled={!valid} style={pickerPrimaryStyle(!valid)}>Apply</button>
+            <button onClick={() => setOpen(false)} style={pickerSecondaryStyle}>{t.common.cancel}</button>
+            <button onClick={apply} disabled={!valid} style={pickerPrimaryStyle(!valid)}>{t.admin.usage.period.applyRange}</button>
           </div>
         </div>
       )}
@@ -465,16 +477,20 @@ const pickerPrimaryStyle = (disabled) => ({
   opacity: disabled ? 0.6 : 1,
 });
 
-function UsageSummary({ label, value, sub, accent, icon }) {
+function UsageSummary({ label, value, sub, iconBg, iconColor, icon }) {
   return (
-    <div className="card stat-card" style={{ cursor: 'default', padding: '1rem 1.25rem' }}>
-      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:12 }}>
-        <div style={{ minWidth:0 }}>
-          <div style={{ fontSize:'1.75rem', fontWeight:700, lineHeight:1, margin:0 }}>{value}</div>
-          <div style={{ fontSize:'0.75rem', color:'var(--muted-foreground)', marginTop:8 }}>{label}</div>
-          <div className="mono" style={{ fontSize:'0.6875rem', color:'var(--muted-foreground)', marginTop:4 }}>{sub}</div>
+    <div className="card" style={{ padding: '1.25rem' }}>
+      <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:16 }}>
+        <div style={{ minWidth:0, display:'flex', flexDirection:'column', gap:4 }}>
+          <span style={{ fontSize:'0.875rem', color:'var(--muted-foreground)' }}>{label}</span>
+          <span style={{ fontSize:'1.875rem', fontWeight:700, lineHeight:1.1, letterSpacing:'-0.02em' }}>{value}</span>
+          <span style={{ fontSize:'0.75rem', color:'var(--muted-foreground)', marginTop:4 }}>{sub}</span>
         </div>
-        <div className="kpi-icon" style={{ background: `color-mix(in srgb, ${accent} 15%, transparent)`, color: accent }}>{icon}</div>
+        <span style={{
+          width:'2.25rem', height:'2.25rem', borderRadius:'0.375rem', flexShrink:0,
+          display:'flex', alignItems:'center', justifyContent:'center',
+          background: iconBg, color: iconColor,
+        }}>{icon}</span>
       </div>
     </div>
   );
@@ -603,7 +619,7 @@ function UsageChart({ data, maxes, bucket = 'day', selectedIdx, onSelect }) {
                 opacity={isSelected ? 0.55 : isHover ? 0.35 : 0}/>
               <rect x={x} y={y} width={barW} height={Math.max(barH, 0.5)}
                 rx="2" ry="2"
-                fill="var(--accent)"
+                fill={isSelected ? '#0891b2' : '#22d3ee'}
                 opacity={dim ? 0.4 : (isHover || isSelected ? 1 : 0.88)}/>
             </g>
           );
@@ -611,11 +627,11 @@ function UsageChart({ data, maxes, bucket = 'day', selectedIdx, onSelect }) {
 
         {/* Cases line (right axis) */}
         <path d={linePath} fill="none"
-          stroke="var(--sev-crit)" strokeWidth="1.6"
+          stroke="#f87171" strokeWidth="1.6"
           strokeLinecap="round" strokeLinejoin="round" opacity="0.95"/>
         {linePoints.map((p, i) => (
           <circle key={i} cx={p.x} cy={p.y} r={hover?.idx === i ? 3.2 : 2.2}
-            fill="var(--bg-2)" stroke="var(--sev-crit)" strokeWidth="1.4"/>
+            fill="var(--bg-2)" stroke="#f87171" strokeWidth="1.4"/>
         ))}
 
         {/* Hover guide */}
@@ -710,8 +726,8 @@ function UsageTooltip({ day, bucket = 'day', svgCx, svgTopY, svgW, svgH, contain
       <div className="mono" style={{ fontSize:11, color:'var(--fg-3)', letterSpacing:'0.08em', marginBottom:8 }}>
         {formatBucketLong(day.date, bucket).toUpperCase()}
       </div>
-      <UsageTipRow color="var(--accent)" label="Cost" value={`$${day.cost.toFixed(2)}`}/>
-      <UsageTipRow color="var(--sev-crit)" label="Cases" value={day.investigations.toLocaleString()}/>
+      <UsageTipRow color="#22d3ee" label="Cost" value={`$${day.cost.toFixed(2)}`}/>
+      <UsageTipRow color="#f87171" label="Cases" value={day.investigations.toLocaleString()}/>
       <UsageTipRow color="var(--fg-3)" label="Tokens" value={day.tokens.toLocaleString()}/>
       <div style={{ height:1, background:'var(--line)', margin:'8px 0 6px' }}/>
       <div className="mono" style={{ display:'flex', justifyContent:'space-between', fontSize:10.5, color:'var(--fg-4)' }}>
@@ -766,7 +782,7 @@ const USAGE_TOP_USERS = [
 ];
 
 const USAGE_USER_COLORS = [
-  'var(--accent)', 'var(--sev-ok)', 'var(--sev-crit)', 'var(--sev-warn)',
+  'var(--accent)', 'var(--sev-ok)', 'var(--sev-crit)', 'var(--warning)',
   'var(--sev-med)', 'var(--sev-low)', 'var(--sev-info)', 'var(--fg-2)',
   'var(--accent-2)', 'var(--sev-high)',
 ];
@@ -808,20 +824,27 @@ function buildTopUsers(days) {
   }
 
   totals.sort((a, b) => b.cost - a.cost);
-  return totals.slice(0, 10);
+  return totals.slice(0, 5);
 }
 
-function UsageTopUsers({ users, scopeLabel }) {
+function UsageTopUsers({ users, scopeLabel, t }) {
+  const top = users.slice(0, 5);
+  const hasData = top.some(u => u.cost > 0 || u.tokens > 0);
   return (
     <div className="card" style={{ display:'flex', flexDirection:'column', minHeight:0 }}>
       <div style={{ padding:'10px 16px 8px', borderBottom:'1px solid var(--line)' }}>
-        <div style={{ fontSize:13, fontWeight:600 }}>Top users</div>
+        <div style={{ fontSize:13, fontWeight:600 }}>{t.admin.usage.topUsers.title}</div>
         <div style={{ fontSize:11, color:'var(--fg-3)', marginTop:1 }}>
-          Highest spend · {scopeLabel}
+          {t.admin.usage.topUsers.subtitle.replace('{period}', scopeLabel)}
         </div>
       </div>
       <div style={{ padding:'4px 6px 6px', overflowY:'auto' }}>
-        {users.map((u, i) => {
+        {!hasData ? (
+          <div style={{ padding:'24px 16px', textAlign:'center' }}>
+            <div style={{ fontSize:12.5, fontWeight:600, color:'var(--fg-2)' }}>{t.admin.usage.topUsers.unavailableTitle}</div>
+            <div style={{ fontSize:11, color:'var(--fg-3)', marginTop:6 }}>{t.admin.usage.topUsers.unavailableDescription}</div>
+          </div>
+        ) : top.map((u, i) => {
           const color = USAGE_USER_COLORS[i % USAGE_USER_COLORS.length];
           return (
             <div key={u.initials} style={{
@@ -843,9 +866,9 @@ function UsageTopUsers({ users, scopeLabel }) {
               <div style={{ minWidth:0 }}>
                 <div style={{ fontSize:12, fontWeight:500, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', lineHeight:1.2 }}>{u.name}</div>
                 <div className="mono" style={{ fontSize:10, color:'var(--fg-3)', marginTop:1, display:'flex', gap:6, flexWrap:'wrap', lineHeight:1.2 }}>
-                  <span>{u.cases} cases</span>
+                  <span>{u.cases} {t.admin.usage.topUsers.casesShort}</span>
                   <span>·</span>
-                  <span>{formatTokens(u.tokens)} tok</span>
+                  <span>{formatTokens(u.tokens)} {t.admin.usage.topUsers.tokensShort}</span>
                 </div>
               </div>
               <div className="mono" style={{ fontSize:11.5, fontWeight:600, textAlign:'right', whiteSpace:'nowrap' }}>
@@ -862,14 +885,10 @@ function UsageTopUsers({ users, scopeLabel }) {
 // ------- drilldown -------
 
 const USAGE_DRILLDOWN_TITLES = [
-  ['Disk Space Low', 'low'], ['High API Error Rate', 'high'], ['Memory Leak Detected', 'high'],
-  ['Network Latency Spike', 'medium'], ['SSL Certificate Expiring', 'info'], ['Redis Cache Miss Rate High', 'low'],
-  ['High CPU Usage', 'medium'], ['Pod CrashLoopBackOff', 'high'], ['Queue Backlog Growing', 'medium'],
-  ['Database Connection Saturation', 'high'], ['Certificate rotation reminder', 'info'], ['DNS resolution slow', 'low'],
-];
-
-const USAGE_DRILLDOWN_SERVICES = [
-  'api-gateway', 'storage-04', 'payments', 'web-prod-01', 'workers-eu', 'edge-eu-west', 'redis-3',
+  ['Disk Space Low', 'low', 'PROCESSING'], ['High API Error Rate', 'high', 'PROCESSING'], ['Memory Leak Detected', 'high', 'CLOSED'],
+  ['Network Latency Spike', 'medium', 'AWAITING_ACTION'], ['SSL Certificate Expiring', 'info', 'CLOSED'], ['Redis Cache Miss Rate High', 'low', 'PROCESSING'],
+  ['High CPU Usage', 'medium', 'PROCESSING'], ['Pod CrashLoopBackOff', 'high', 'AWAITING_ACTION'], ['Queue Backlog Growing', 'medium', 'PROCESSING'],
+  ['Database Connection Saturation', 'high', 'CLOSED'], ['Certificate rotation reminder', 'info', 'CLOSED'], ['DNS resolution slow', 'low', 'PROCESSING'],
 ];
 
 function buildUsageDayCases(day) {
@@ -887,22 +906,32 @@ function buildUsageDayCases(day) {
   for (let i = 0; i < n; i++) {
     const tokens = Math.round((day.tokens * weights[i]) / totalW);
     const cost = +(tokens * 0.0000054).toFixed(3);
-    const [title, sev] = USAGE_DRILLDOWN_TITLES[Math.floor(rand() * USAGE_DRILLDOWN_TITLES.length)];
+    const [title, sev, caseStatus] = USAGE_DRILLDOWN_TITLES[Math.floor(rand() * USAGE_DRILLDOWN_TITLES.length)];
+    const caseNum = 100 + Math.floor(rand() * 900);
     out.push({
-      caseId: `#${100 + Math.floor(rand() * 900)}`,
+      caseId: caseNum,
+      case_id: caseNum,
+      alert_name: title,
       title, sev,
-      service: USAGE_DRILLDOWN_SERVICES[Math.floor(rand() * USAGE_DRILLDOWN_SERVICES.length)],
+      case_status: caseStatus,
+      caseStatus: caseStatus === 'CLOSED' ? 'closed' : caseStatus === 'AWAITING_ACTION' ? 'awaiting' : 'processing',
       tokens, cost,
-      auto: rand() > 0.45,
+      cost_with_markup: String(cost),
     });
   }
   out.sort((a, b) => b.cost - a.cost);
   return out;
 }
 
-function UsageDrilldown({ day, rangeData, rangeTotals, rangeLabel, bucket = 'day', onClose }) {
+function formatUsageCurrency(n) {
+  return '$' + (typeof n === 'number' ? n : parseFloat(n) || 0).toFixed(2);
+}
+
+function UsageDrilldown({ day, rangeData, rangeTotals, rangeLabel, bucket = 'day' }) {
   const { t } = useI18n();
   const isDay = day != null;
+  const periodLabel = isDay ? formatBucketLong(day.date, bucket) : rangeLabel;
+
   const cases = React.useMemo(() => {
     const all = isDay
       ? buildUsageDayCases(day)
@@ -911,77 +940,69 @@ function UsageDrilldown({ day, rangeData, rangeTotals, rangeLabel, bucket = 'day
     return all.slice(0, 10);
   }, [isDay, day, rangeData]);
 
-  const headerTitle = isDay
-    ? `${t.admin.usage.topCases} · ${formatBucketLong(day.date, bucket)}`
-    : `${t.admin.usage.topCases} · ${rangeLabel}`;
-  const headerSub = isDay
-    ? `${day.investigations} investigations · ${day.tokens.toLocaleString()} tokens · $${day.cost.toFixed(2)}`
-    : `${rangeTotals.investigations.toLocaleString()} investigations · ${rangeTotals.tokens.toLocaleString()} tokens · $${rangeTotals.cost.toFixed(2)}`;
+  const summaryTokens = cases.reduce((s, c) => s + c.tokens, 0);
+  const summaryCost = cases.reduce((s, c) => s + c.cost, 0);
+  const summaryText = t.admin.usage.topCases.summary
+    .replace('{count}', String(cases.length))
+    .replace('{tokens}', summaryTokens.toLocaleString())
+    .replace('{cost}', formatUsageCurrency(summaryCost));
+
+  const cols = t.admin.usage.topCases.columns;
 
   return (
-    <div style={{
-      marginTop:14,
-      background:'var(--bg-2)',
-      border: isDay ? '1px solid var(--accent-2)' : '1px solid var(--line)',
-      borderRadius:12, overflow:'hidden',
-      boxShadow: isDay ? '0 0 0 3px var(--accent-glow)' : 'none',
+    <div className="card" style={{
+      marginTop: 14, overflow: 'hidden',
+      border: isDay ? '1px solid var(--accent-2)' : undefined,
+      boxShadow: isDay ? '0 0 0 3px var(--accent-glow)' : undefined,
     }}>
-      <div style={{
-        padding:'12px 18px', borderBottom:'1px solid var(--line)',
-        display:'flex', alignItems:'center', justifyContent:'space-between', gap:12, flexWrap:'wrap',
-      }}>
-        <div>
-          <div style={{ fontSize:13, fontWeight:600 }}>{headerTitle}</div>
-          <div className="mono" style={{ fontSize:11, color:'var(--fg-3)', marginTop:3 }}>{headerSub}</div>
+      <div style={{ padding: '12px 18px', borderBottom: '1px solid var(--line)' }}>
+        <div style={{ fontSize: 13, fontWeight: 600 }}>{t.admin.usage.topCases.title}</div>
+        <div style={{ fontSize: 11, color: 'var(--fg-3)', marginTop: 2 }}>
+          {t.admin.usage.topCases.subtitle.replace('{period}', periodLabel)}
         </div>
+        {cases.length > 0 && (
+          <div className="mono" style={{ fontSize: 11, color: 'var(--fg-3)', marginTop: 6 }}>{summaryText}</div>
+        )}
       </div>
-      <div>
-        <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12 }}>
+      {cases.length === 0 ? (
+        <div style={{ padding: '32px 20px', textAlign: 'center' }}>
+          <div style={{ fontSize: 12.5, fontWeight: 600 }}>{t.admin.usage.topCases.emptyTitle}</div>
+          <div style={{ fontSize: 11, color: 'var(--fg-3)', marginTop: 6 }}>{t.admin.usage.topCases.emptyDescription}</div>
+        </div>
+      ) : (
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8125rem' }}>
           <thead>
-            <tr style={{ background:'var(--bg-2)' }}>
-              <th style={usageDrillTh}>{t.cases.title}</th>
-              <th style={usageDrillTh}>{t.alerts.severity}</th>
-              <th style={usageDrillTh}>{t.alerts.alert}</th>
-              <th style={usageDrillTh}>{t.alerts.service}</th>
-              <th style={usageDrillTh}>Resolution</th>
-              <th style={{ ...usageDrillTh, textAlign:'right' }}>{t.admin.usage.tokens}</th>
-              <th style={{ ...usageDrillTh, textAlign:'right' }}>{t.admin.usage.cost}</th>
+            <tr style={{ background: 'color-mix(in oklch, var(--muted) 40%, transparent)' }}>
+              <th style={usageDrillTh}>{cols.case}</th>
+              <th style={usageDrillTh}>{cols.title}</th>
+              <th style={usageDrillTh}>{cols.status}</th>
+              <th style={{ ...usageDrillTh, textAlign: 'right' }}>{cols.tokens}</th>
+              <th style={{ ...usageDrillTh, textAlign: 'right' }}>{cols.cost}</th>
             </tr>
           </thead>
           <tbody>
             {cases.map((c, i) => (
-              <tr key={i} style={{ borderTop:'1px solid var(--line)' }}>
-                <td className="mono" style={usageDrillTd}>{c.caseId}</td>
-                <td style={usageDrillTd}><SeverityPill sev={c.sev}/></td>
-                <td style={usageDrillTd}>{c.title}</td>
-                <td className="mono" style={{ ...usageDrillTd, color:'var(--fg-2)' }}>{c.service}</td>
+              <tr key={i} style={{ borderTop: '1px solid var(--line)' }}>
+                <td className="mono" style={usageDrillTd}>#{c.case_id || c.caseId}</td>
+                <td style={usageDrillTd}>{c.alert_name || c.title}</td>
                 <td style={usageDrillTd}>
-                  <span style={{
-                    display:'inline-flex', alignItems:'center', gap:5,
-                    padding:'1px 8px', borderRadius:99,
-                    background: c.auto ? 'color-mix(in oklch, var(--sev-ok) 14%, transparent)' : 'var(--bg-3)',
-                    border:`1px solid ${c.auto ? 'color-mix(in oklch, var(--sev-ok) 30%, transparent)' : 'var(--line)'}`,
-                    color: c.auto ? 'var(--sev-ok)' : 'var(--fg-3)',
-                    fontSize:10.5,
-                  }}>
-                    {c.auto ? 'AI auto' : 'SRE assisted'}
-                  </span>
+                  <CaseStatusBadge caseStatus={c.case_status} status={c.caseStatus}/>
                 </td>
-                <td className="mono" style={{ ...usageDrillTd, color:'var(--fg-2)', textAlign:'right' }}>{c.tokens.toLocaleString()}</td>
-                <td className="mono" style={{ ...usageDrillTd, fontWeight:600, textAlign:'right' }}>${c.cost.toFixed(3)}</td>
+                <td className="mono" style={{ ...usageDrillTd, textAlign: 'right', color: 'var(--fg-2)' }}>{c.tokens.toLocaleString()}</td>
+                <td className="mono" style={{ ...usageDrillTd, fontWeight: 600, textAlign: 'right' }}>{formatUsageCurrency(c.cost)}</td>
               </tr>
             ))}
           </tbody>
         </table>
-      </div>
+      )}
     </div>
   );
 }
 
 const usageDrillTh = {
-  textAlign:'left', fontWeight:500, fontSize:11, color:'var(--fg-3)',
-  padding:'9px 12px', borderBottom:'1px solid var(--line)', whiteSpace:'nowrap',
+  textAlign:'left', fontWeight:500, fontSize:'0.75rem', color:'var(--muted-foreground)',
+  padding:'12px 16px', whiteSpace:'nowrap',
 };
-const usageDrillTd = { padding:'9px 12px', verticalAlign:'middle' };
+const usageDrillTd = { padding:'12px 16px', verticalAlign:'middle' };
 
 Object.assign(window, { UsageMetricsPage });
