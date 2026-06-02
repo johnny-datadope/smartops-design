@@ -206,63 +206,6 @@ const usersThStyle = {
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const USERNAME_RE = /^[a-zA-Z0-9._-]+$/;
 
-/** Single-select matching Apolo Radix Select (admin user role). */
-function FormSelect({ id, testId, value, onChange, options }) {
-  const [open, setOpen] = React.useState(false);
-  const rootRef = React.useRef(null);
-  const selected = options.find(o => o.value === value);
-
-  React.useEffect(() => {
-    if (!open) return;
-    const onDoc = (e) => {
-      if (rootRef.current && !rootRef.current.contains(e.target)) setOpen(false);
-    };
-    document.addEventListener('mousedown', onDoc);
-    return () => document.removeEventListener('mousedown', onDoc);
-  }, [open]);
-
-  return (
-    <div className="form-select" ref={rootRef}>
-      <button
-        type="button"
-        id={id}
-        data-testid={testId}
-        className="form-select__trigger"
-        aria-expanded={open}
-        aria-haspopup="listbox"
-        onClick={() => setOpen(o => !o)}
-      >
-        <span>{selected?.label ?? value}</span>
-        <span className="form-select__chevron" aria-hidden="true"><IconChevronDown size={16}/></span>
-      </button>
-      {open && (
-        <div className="form-select__content" role="listbox" aria-label={id}>
-          {options.map(opt => {
-            const isSelected = opt.value === value;
-            return (
-              <button
-                key={opt.value}
-                type="button"
-                role="option"
-                aria-selected={isSelected}
-                className="form-select__item"
-                onClick={() => { onChange(opt.value); setOpen(false); }}
-              >
-                {opt.label}
-                {isSelected && (
-                  <span className="form-select__check" aria-hidden="true">
-                    <IconCheck size={16}/>
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
-
 function UserFormDialog({ mode, user, open, onClose, onSubmit, isSubmitting }) {
   const { t } = useI18n();
   const sso = mode === 'edit' && user && isSsoUser(user);

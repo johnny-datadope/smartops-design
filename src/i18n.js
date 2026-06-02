@@ -2,7 +2,7 @@
 
 const TRANSLATIONS = {
   'en-GB': {
-    nav: { alerts: 'Events', administration: 'ADMINISTRATION' },
+    nav: { alerts: 'Events', administration: 'Administration' },
     common: {
       loading: 'Loading…', cancel: 'Cancel', save: 'Save', confirm: 'Confirm', close: 'Close',
       search: 'Search', view: 'View', back: 'Back',
@@ -24,7 +24,7 @@ const TRANSLATIONS = {
     },
     support: { openAlertTicket: 'Open ticket for this alert' },
     users: { title: 'Users' },
-    userMenu: { openMenu: 'Open user menu', preferences: 'Preferences', account: 'Account', language: 'Language', openTicket: 'Open support ticket' },
+    userMenu: { openMenu: 'Open user menu', preferences: 'Preferences', account: 'Account', language: 'Language' },
     theme: { label: 'Theme', light: 'Light', dark: 'Dark' },
     footer: { version: 'SmartOps Version: {version}' },
     alerts: {
@@ -326,7 +326,7 @@ const TRANSLATIONS = {
     },
   },
   'es-ES': {
-    nav: { alerts: 'Eventos', administration: 'ADMINISTRACIÓN' },
+    nav: { alerts: 'Eventos', administration: 'Administración' },
     common: {
       loading: 'Cargando…', cancel: 'Cancelar', save: 'Guardar', confirm: 'Confirmar', close: 'Cerrar',
       search: 'Buscar', view: 'Ver', back: 'Volver',
@@ -348,7 +348,7 @@ const TRANSLATIONS = {
     },
     support: { openAlertTicket: 'Abrir ticket para esta alerta' },
     users: { title: 'Usuarios' },
-    userMenu: { openMenu: 'Abrir menú de usuario', preferences: 'Preferencias', account: 'Cuenta', language: 'Idioma', openTicket: 'Abrir ticket de soporte' },
+    userMenu: { openMenu: 'Abrir menú de usuario', preferences: 'Preferencias', account: 'Cuenta', language: 'Idioma' },
     theme: { label: 'Tema', light: 'Claro', dark: 'Oscuro' },
     footer: { version: 'SmartOps Versión: {version}' },
     alerts: {

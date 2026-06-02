@@ -28,21 +28,6 @@ function loadStoredRightPct() {
   return PANEL_RIGHT_DEFAULT;
 }
 
-function useIsMobile(breakpoint = 768) {
-  const query = `(max-width: ${breakpoint - 1}px)`;
-  const subscribe = React.useCallback((cb) => {
-    if (typeof window === 'undefined') return () => {};
-    const mql = window.matchMedia(query);
-    mql.addEventListener('change', cb);
-    return () => mql.removeEventListener('change', cb);
-  }, [query]);
-  const getSnapshot = React.useCallback(
-    () => typeof window !== 'undefined' && window.innerWidth < breakpoint,
-    [breakpoint],
-  );
-  return React.useSyncExternalStore(subscribe, getSnapshot, () => false);
-}
-
 function parseEventAtLocal(s) {
   if (!s) return null;
   return parseFlexibleDate(s);

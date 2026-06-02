@@ -278,6 +278,43 @@ function EventsTable({ events, onOpenDetail, onArchive, showArchived }) {
 
   React.useEffect(() => { setPage(0); }, [events.length, pageSize]);
 
+  const isMobile = useIsMobile();
+
+  if (isMobile) {
+    return (
+      <div className="card alert-mobile-list">
+        <div className="alert-mobile-list__body">
+          {pageRows.length === 0 ? (
+            <p className="alert-mobile-list__empty">{t.alerts.noAlertsMatching}</p>
+          ) : (
+            pageRows.map((e) => {
+              const i = EVENTS.indexOf(e);
+              const rowKey = e.id || i;
+              return (
+                <AlertMobileCard
+                  key={rowKey}
+                  event={e}
+                  eventIndex={i}
+                  showArchived={showArchived}
+                  onOpenDetail={onOpenDetail}
+                  onArchive={onArchive}
+                />
+              );
+            })
+          )}
+        </div>
+        <TablePagination
+          currentPage={safePage}
+          totalPages={totalPages}
+          pageSize={pageSize}
+          totalItems={sorted.length}
+          onPageChange={setPage}
+          onPageSizeChange={setPageSize}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="card" style={{ overflow: 'hidden' }}>
       <div style={{ overflowX: 'auto' }}>
@@ -393,73 +430,6 @@ function EventsTable({ events, onOpenDetail, onArchive, showArchived }) {
         onPageChange={setPage}
         onPageSizeChange={setPageSize}
       />
-    </div>
-  );
-}
-
-function TablePagination({ currentPage, totalPages, pageSize, totalItems, onPageChange, onPageSizeChange }) {
-  const { t } = useI18n();
-  const startItem = totalItems === 0 ? 0 : currentPage * pageSize + 1;
-  const endItem = Math.min((currentPage + 1) * pageSize, totalItems);
-
-  const getPageNumbers = () => {
-    const pages = [];
-    const maxPages = 5;
-    const page1 = currentPage + 1;
-    if (totalPages <= maxPages) {
-      for (let i = 1; i <= totalPages; i++) pages.push(i);
-    } else {
-      pages.push(1);
-      if (page1 <= 3) {
-        for (let i = 2; i <= 4; i++) pages.push(i);
-        pages.push('ellipsis');
-        pages.push(totalPages);
-      } else if (page1 >= totalPages - 2) {
-        pages.push('ellipsis');
-        for (let i = totalPages - 3; i <= totalPages; i++) pages.push(i);
-      } else {
-        pages.push('ellipsis');
-        pages.push(page1 - 1);
-        pages.push(page1);
-        pages.push(page1 + 1);
-        pages.push('ellipsis');
-        pages.push(totalPages);
-      }
-    }
-    return pages;
-  };
-
-  return (
-    <div className="table-pagination">
-      <span className="mono">{startItem}–{endItem} / {totalItems}</span>
-      {totalPages > 1 && (
-        <div className="table-pagination__pages">
-          <button type="button" className="page-num" disabled={currentPage <= 0} onClick={() => onPageChange(currentPage - 1)}>‹</button>
-          {getPageNumbers().map((page, i) =>
-            page === 'ellipsis' ? (
-              <span key={'e' + i} style={{ padding: '0 2px', userSelect: 'none' }}>…</span>
-            ) : (
-              <button
-                key={page}
-                type="button"
-                className={'page-num' + (page === currentPage + 1 ? ' is-active' : '')}
-                onClick={() => onPageChange(page - 1)}
-              >{page}</button>
-            )
-          )}
-          <button type="button" className="page-num" disabled={currentPage >= totalPages - 1} onClick={() => onPageChange(currentPage + 1)}>›</button>
-        </div>
-      )}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-        <span>{t.common.rows}</span>
-        <select value={pageSize} onChange={ev => onPageSizeChange(+ev.target.value)} style={{
-          height: 24, width: 56, padding: '0 8px', borderRadius: 6,
-          border: '1px solid color-mix(in oklch, var(--border) 40%, transparent)',
-          background: 'transparent', color: 'var(--foreground)', fontSize: '0.6875rem',
-        }}>
-          {[10, 25, 50, 100].map(n => <option key={n} value={n}>{n}</option>)}
-        </select>
-      </div>
     </div>
   );
 }
@@ -755,13 +725,14 @@ function EventsPage({ onOpenDetail, currentUser }) {
 
   return (
     <div className="layout-page">
-      {/* Page header */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 20 }}>
-        <div>
-          <h1 style={{ fontSize: '1.75rem', fontWeight: 700, letterSpacing: '-0.02em', margin: 0 }}>{t.alerts.title}</h1>
-          <div style={{ fontSize: '0.875rem', color: 'var(--muted-foreground)', marginTop: 4 }}>{t.alerts.subtitle}</div>
+      <div className="events-page-header">
+        <div className="events-page-header__text">
+          <h1 className="events-page-title">{t.alerts.title}</h1>
+          <p className="events-page-subtitle">{t.alerts.subtitle}</p>
         </div>
-    <button onClick={() => {
+        <button
+          type="button"
+          onClick={() => {
       const titles = ['Disk Space Low', 'High API Error Rate', 'Memory Leak Detected', 'Network Latency Spike', 'SSL Certificate Expiring'];
       const sevs = ['INFO', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
       const components = ['storage', 'api', 'application', 'network', 'security'];
@@ -794,7 +765,7 @@ function EventsPage({ onOpenDetail, currentUser }) {
       }));
       setNonce(x => x + 1);
     }}
-    className="btn btn--outline btn--sm"
+          className="btn btn--outline btn--sm events-page-header__action"
         >
           <IconPlus size={14}/> {t.alerts.createFake}
         </button>
@@ -802,8 +773,7 @@ function EventsPage({ onOpenDetail, currentUser }) {
 
       <StatCards events={EVENTS} filter={filter} setFilter={setFilter}/>
 
-      {/* Search bar + controls */}
-      <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+      <div className="events-filter-bar">
         <div className="input-wrap" style={{ flex: 1, minWidth: 200 }}>
           <IconSearch size={14} style={{ color: 'var(--muted-foreground)', flexShrink: 0 }}/>
           <input
@@ -1322,4 +1292,4 @@ function FilterAssigneePicker({ users, selected, onChange, placeholder }) {
   );
 }
 
-Object.assign(window, { EventsPage, StatCard });
+Object.assign(window, { EventsPage, StatCard, AssigneeCell });

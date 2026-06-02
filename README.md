@@ -36,6 +36,11 @@ src/
   login.jsx
   events.jsx       # Events dashboard (KPIs, filters, table, pagination)
   event_detail.jsx # 90vw modal, split-pane detail + AI chat
+  breakpoints.js     # 640/768/1024/1280 (sync with Apolo)
+  use-mobile.js      # useIsMobile / useIsTablet / useIsDesktop
+  form_select.jsx    # Apolo Select (forms + compact rows picker)
+  table_pagination.jsx
+  alert-mobile-card.jsx
   users.jsx
   administration.jsx
   usage.jsx
@@ -66,6 +71,7 @@ src/
 - [x] Filters popover + active filter chips (Customer/Project/Environment)
 - [x] Table: Event Status, Customer, Time columns; assignee avatars; empty state
 - [x] Pagination: page numbers + rows selector
+- [x] Responsive: mobile nav drawer (&lt;768px), Events card list, Apolo breakpoints
 - [x] Modal: timeline, Overview comments, JSON payload, CaseManagement, ChatPanelHeader
 - [x] Admin Users / Usage: i18n, Password column, Cases KPI
 - [x] User menu: theme Light / Dark only (no System); logout copy; footer version

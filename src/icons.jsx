@@ -170,6 +170,16 @@ const IconPenLine = (p) => <Icon {...p} d={<>
   <path d="M16.376 3.622a1 1 0 0 1 3.002 3.002L7.368 18.635a2 2 0 0 1-.855.506l-2.872.838a.5.5 0 0 1-.62-.62l.838-2.872a2 2 0 0 1 .506-.854z"/>
 </>} />;
 
+// Lucide Menu — Apolo app-header mobile drawer
+const IconMenu = (p) => <Icon {...p} d={<>
+  <path d="M4 6h16"/><path d="M4 12h16"/><path d="M4 18h16"/>
+</>} />;
+const IconServer = (p) => <Icon {...p} d={<>
+  <rect width="20" height="8" x="2" y="2" rx="2" ry="2"/>
+  <rect width="20" height="8" x="2" y="14" rx="2" ry="2"/>
+  <path d="M6 6h.01"/><path d="M6 18h.01"/>
+</>} />;
+
 const IconMoreVertical = (p) => <Icon {...p} d={<>
   <circle cx="12" cy="5" r="1.5" fill="currentColor" stroke="none"/>
   <circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/>
@@ -212,7 +222,7 @@ const ICON_EXPORTS = {
   IconLogout, IconHeadset, IconArrowUpDown, IconArrowUp, IconArrowDown, IconCheck, IconCheckCircle2, IconEye, IconEyeOff, IconAlert, IconTriangle, IconChevronDown, IconHash, IconShieldCheck, IconActivity, IconLineChart,
   IconClose, IconXCircle, IconChevron, IconChevronLeft, IconChevronRight, IconBarChart3, IconSparkles, IconSparkle, IconDollarSign, IconCopy, IconLink, IconMaximize, IconMinimize, IconMinimize2, IconExternalLink, IconTerminal,
   IconBriefcase, IconMessageSquare, IconDatabase, IconClock, IconCalendar, IconUsers, IconUsersRound, IconThumbsUp, IconThumbsDown, IconPenLine, IconGripVertical,
-  IconLifeBuoy, IconRotateCcw, IconFileText, IconShare, IconUser, IconUserX, IconSend, IconBrain, IconBrainCircuit, IconMoreVertical, IconSun, IconMoon,
+  IconLifeBuoy, IconRotateCcw, IconFileText, IconShare, IconUser, IconUserX, IconSend, IconBrain, IconBrainCircuit, IconMenu, IconServer, IconMoreVertical, IconSun, IconMoon,
   IconInvestigate, IconGoogle,
 };
 Object.assign(window, ICON_EXPORTS);
