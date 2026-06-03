@@ -220,7 +220,7 @@ function EventDetail({ event, onClose, onCreateCase, onAssign, onEventUpdate, cu
   const [feedback, setFeedback] = React.useState(null);
   const [shareOpen, setShareOpen] = React.useState(false);
   const [copied, setCopied] = React.useState(false);
-  const [isMaximized, setIsMaximized] = React.useState(false);
+  const [isMaximized, setIsMaximized] = React.useState(true);
   const isMobile = useIsMobile();
   const [mobileView, setMobileView] = React.useState('detail');
   const containerRef = React.useRef(null);
@@ -237,6 +237,14 @@ function EventDetail({ event, onClose, onCreateCase, onAssign, onEventUpdate, cu
   const [turns, setTurns] = React.useState([]);
   const [busy, setBusy] = React.useState(false);
   const scrollRef = React.useRef(null);
+
+  // EventDetail stays mounted when closed; reset fullscreen and tab each time an event opens.
+  React.useEffect(() => {
+    if (event) {
+      setIsMaximized(true);
+      setTab('overview');
+    }
+  }, [event?.id]);
 
   const submitComment = () => {
     const text = comment.trim();
@@ -427,14 +435,11 @@ function EventDetail({ event, onClose, onCreateCase, onAssign, onEventUpdate, cu
     ? resolveInvestigationStages(event)
     : null;
   void stageRev;
+  const commentsTabLabel = t.cases.caseCommentsTab.replace('{count}', String(comments.length));
   const tabs = [
     { id: 'overview', label: t.alertDetail.overview, shortLabel: t.alertDetail.overview },
+    { id: 'comments', label: commentsTabLabel, shortLabel: commentsTabLabel },
     { id: 'activity', label: t.alertDetail.activity, shortLabel: t.alertDetail.activity },
-    {
-      id: 'info',
-      label: t.alertDetail.additionalInfo,
-      shortLabel: t.alertDetail.additionalInfoShort,
-    },
   ];
 
   const startResize = (e) => {
@@ -494,8 +499,10 @@ function EventDetail({ event, onClose, onCreateCase, onAssign, onEventUpdate, cu
 
       <div style={{ flex:1, overflowY:'auto', padding:'1.125rem 1.25rem', minHeight:0 }}>
         {tab === 'overview' && (
-          <OverviewPane
-            event={event}
+          <OverviewPane event={event} t={t}/>
+        )}
+        {tab === 'comments' && (
+          <CommentsSection
             t={t}
             comments={comments}
             comment={comment}
@@ -504,7 +511,6 @@ function EventDetail({ event, onClose, onCreateCase, onAssign, onEventUpdate, cu
           />
         )}
         {tab === 'activity' && <ActivityPane t={t}/>}
-        {tab === 'info' && <ExtraPane event={event} t={t}/>}
       </div>
     </div>
   );
@@ -1057,13 +1063,15 @@ function EmptyCaseState({ t, isUserAssigned, isCreating, onCreateCase }) {
   );
 }
 
-function OverviewPane({ event, t, comments, comment, setComment, submitComment }) {
+function OverviewPane({ event, t }) {
   const primaryLabels = [
     ['app', event.service || 'unknown'],
     ['severity', (event.sev || 'info').toLowerCase()],
     ['namespace', event.namespace || event.scope || 'default'],
     ['alertname', (event.title || '').replace(/\s+/g, '')],
   ];
+  const summaryText = alertSummaryText(event) || t.alertDetail.noAvailableData;
+  const detailsText = alertDetailsText(event) || t.alertDetail.noAvailableData;
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:18 }}>
       <div className="card" style={{ padding:16 }}>
@@ -1080,12 +1088,12 @@ function OverviewPane({ event, t, comments, comment, setComment, submitComment }
         <div style={{ marginLeft:32, display:'flex', flexDirection:'column', gap:12 }}>
           <div>
             <p className="overview-label">{t.alertDetail.summary}</p>
-            <p style={{ fontSize:'0.875rem', lineHeight:1.6, margin:0 }}>{event.detail}</p>
+            <p style={{ fontSize:'0.875rem', lineHeight:1.6, margin:0 }}>{summaryText}</p>
           </div>
           <div style={{ height:1, background:'var(--border)' }}/>
           <div>
             <p className="overview-label">{t.alertDetail.details}</p>
-            <p style={{ fontSize:'0.875rem', lineHeight:1.6, margin:0 }}>{event.detail}</p>
+            <p style={{ fontSize:'0.875rem', lineHeight:1.6, margin:0 }}>{detailsText}</p>
           </div>
           <div style={{ height:1, background:'var(--border)' }}/>
           <div>
@@ -1101,7 +1109,7 @@ function OverviewPane({ event, t, comments, comment, setComment, submitComment }
           </div>
         </div>
       </div>
-      <CommentsSection t={t} comments={comments} comment={comment} setComment={setComment} submitComment={submitComment}/>
+      <AdditionalInfoSection event={event} t={t}/>
     </div>
   );
 }
@@ -1298,12 +1306,14 @@ function ActivityPane({ t }) {
   );
 }
 
-function ExtraPane({ event, t }) {
+function AdditionalInfoSection({ event, t }) {
   const [copied, setCopied] = React.useState(false);
   const payload = {
     id: event.id,
     alert_name: event.title,
-    alert_description: event.detail,
+    summary: event.summary || null,
+    alert_description: event.alert_description || null,
+    additional_details: event.additional_details || null,
     severity: event.severity || event.sev?.toUpperCase(),
     alert_status: event.alert_status,
     component: event.service,
@@ -1324,17 +1334,26 @@ function ExtraPane({ event, t }) {
     setTimeout(() => setCopied(false), 2000);
   };
   return (
-    <div className="json-payload-card">
-      <div className="json-payload-card__header">
-        <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-          <div className="json-payload-card__icon"><IconDatabase size={14}/></div>
-          <span style={{ fontSize:'0.8125rem', fontWeight:600 }}>{t.alertDetail.jsonPayload}</span>
+    <div className="card" style={{ padding:16 }}>
+      <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:16 }}>
+        <div style={{
+          width:24, height:24, borderRadius:6,
+          background:'color-mix(in oklch, var(--primary) 15%, transparent)',
+          color:'var(--primary)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0,
+        }}>
+          <IconDatabase size={14}/>
         </div>
-        <button type="button" className="btn btn--ghost btn--sm" onClick={handleCopy}>
-          {copied ? <><IconCheck size={12}/> {t.common.copied}</> : <><IconCopy size={12}/> {t.common.copy}</>}
-        </button>
+        <h3 style={{ fontSize:'0.875rem', fontWeight:600, margin:0 }}>{t.alertDetail.additionalInfo}</h3>
       </div>
-      <pre className="json-payload-card__body mono">{jsonString}</pre>
+      <div className="json-payload-card">
+        <div className="json-payload-card__header">
+          <span style={{ fontSize:'0.8125rem', fontWeight:600 }}>{t.alertDetail.jsonPayload}</span>
+          <button type="button" className="btn btn--ghost btn--sm" onClick={handleCopy}>
+            {copied ? <><IconCheck size={12}/> {t.common.copied}</> : <><IconCopy size={12}/> {t.common.copy}</>}
+          </button>
+        </div>
+        <pre className="json-payload-card__body mono">{jsonString}</pre>
+      </div>
     </div>
   );
 }
