@@ -243,7 +243,7 @@ function AlertModalHeader({
   );
 }
 
-function EventDetail({ event, onClose, onInvestigate, onAssign, currentUser, alertId }) {
+function EventDetail({ event, onClose, onCreateCase, onAssign, currentUser, sessionUser, alertId, isCreatingCase }) {
   const { t } = useI18n();
   const [tab, setTab] = React.useState('overview');
   const [comment, setComment] = React.useState('');
@@ -259,6 +259,16 @@ function EventDetail({ event, onClose, onInvestigate, onAssign, currentUser, ale
   const containerRef = React.useRef(null);
   const [rightPct, setRightPct] = React.useState(loadStoredRightPct);
   const [handleActive, setHandleActive] = React.useState(false);
+  const streamStartedRef = React.useRef(null);
+
+  const resolvedSessionUser = sessionUser || (currentUser ? getSessionUser(currentUser) : null);
+  const isUserAssigned = event && resolvedSessionUser
+    ? isCurrentUserAssigned(event, resolvedSessionUser)
+    : false;
+
+  const [turns, setTurns] = React.useState([]);
+  const [busy, setBusy] = React.useState(false);
+  const scrollRef = React.useRef(null);
 
   const submitComment = () => {
     const text = comment.trim();
@@ -283,40 +293,68 @@ function EventDetail({ event, onClose, onInvestigate, onAssign, currentUser, ale
     setComment('');
   };
 
-  // Reasoning thread — each turn is a kind + payload, rendered in order.
-  const initialTurns = React.useMemo(() => ([
-    { id: 'r0', kind: 'reasoning', isStreaming: false, steps: [
-      { label: 'Analysing the alert and planning next steps…', isCompleted: true, toolCalls: [] },
-      {
-        label: 'Starting investigation…',
-        isCompleted: true,
-        toolCalls: [{
-          toolName: 'run_code',
-          command: 'kubectl get pods -A -l app=api -o json',
-          output: "unknown tool name: 'kubectl_impl', available tools: ['fnctl_*', …]",
-          isCompleted: true,
-        }],
+  React.useEffect(() => {
+    if (!event) {
+      setTurns([]);
+      streamStartedRef.current = null;
+      return;
+    }
+    const isLiveInvestigation = event.investigation_started && !event._streamComplete
+      && !event.mock_scenario && !(Array.isArray(event.mock_turns) && event.mock_turns.length);
+    if (!isLiveInvestigation) {
+      streamStartedRef.current = null;
+      setTurns(prev => {
+        if (prev.some(turn => turn.kind === 'analysis') && event._streamComplete) {
+          return prev;
+        }
+        return typeof resolveInitialTurns === 'function' ? resolveInitialTurns(event, t) : [];
+      });
+      setBusy(false);
+    }
+    setFeedback(null);
+    setAiInput('');
+  }, [event?.id, event?.case_id, event?.investigation_started, event?.mock_scenario, event?._streamComplete, t]);
+
+  const runInitialInvestigationStream = React.useCallback(() => {
+    if (!event || busy || typeof streamMockInvestigation !== 'function') return;
+    const streamEvent = {
+      ...event,
+      service: 'api-gateway',
+      component: 'api-gateway',
+      source_host: event.source_host || 'api-gateway-02.example.com',
+    };
+    streamMockInvestigation({
+      event: streamEvent,
+      t,
+      setTurns,
+      setBusy,
+      scenario: 'memory_leak',
+      resetTurns: true,
+      appendAnalysis: true,
+      onComplete: (ev) => {
+        ev._streamComplete = true;
+        ev.mock_scenario = 'memory_leak';
+        ev.case_status = 'AWAITING_ACTION';
+        ev.caseStatus = 'awaiting';
+        ev.agent_status = 'COMPLETED';
       },
-    ]},
-    { id: 'a0', kind: 'analysis',
-      markdown: `### {{root_cause_analysis}}
-**unknown: kubectl tool unavailable in this workspace**
+    });
+  }, [event, event?.case_id, event?.investigation_started, busy, t]);
 
-The \`kubectl\` tool is not available in this environment for inspecting pods, services, and events related to the \`/api/v1/payments\` endpoint returning 500 errors.
+  const investigationStarted = !!event?.investigation_started;
+  const streamComplete = !!event?._streamComplete;
 
-### {{evidence}}
-The MCP \`kubectl_impl\` call failed; no direct cluster observability is reachable from this runner.
+  React.useEffect(() => {
+    if (!event) return;
+    if (event.mock_turns?.length) return;
+    if (event.mock_scenario && streamComplete) return;
+    if (!investigationStarted || streamComplete) return;
+    const key = String(event.id || event.case_id);
+    if (streamStartedRef.current === key) return;
+    streamStartedRef.current = key;
+    runInitialInvestigationStream();
+  }, [event, event?.case_id, investigationStarted, streamComplete, runInitialInvestigationStream]);
 
-### {{proposed_solution}}
-- Verify \`kubectl\` is configured and reachable for this operator.
-- Once available, inspect pods of component \`api\` with \`kubectl get pods -l app=api -o wide\`.
-- Review logs with \`kubectl logs <pod>\` to identify 500 errors on \`/api/v1/payments\`.
-- Inspect recent events: \`kubectl get events --sort-by=.lastTimestamp\`.`,
-    },
-  ]), []);
-  const [turns, setTurns] = React.useState(initialTurns);
-  const [busy, setBusy] = React.useState(false);
-  const scrollRef = React.useRef(null);
   const alertSupportUrl = useAlertHelpdeskUrl(event, alertId, currentUser, turns);
 
   // Autoscroll the reasoning pane whenever turns change.
@@ -334,67 +372,16 @@ The MCP \`kubectl_impl\` call failed; no direct cluster observability is reachab
   };
 
   const runReinvestigate = () => {
-    if (busy) return;
+    if (busy || typeof streamMockInvestigation !== 'function') return;
     setFeedback('PENDING_REVIEW');
-    setBusy(true);
-    const rid = 'r' + Date.now();
-    // Push a new reasoning turn with empty steps, then stream-in each step.
-    setTurns(ts => [...ts, { id: rid, kind: 'reasoning', isStreaming: true, steps: [] }]);
-    const stream = [
-      { label: 'Re-running the investigation with fresh signals…', isCompleted: true, toolCalls: [] },
-      {
-        label: 'Correlating the last 30m of logs and traces…',
-        isCompleted: true,
-        toolCalls: [{
-          toolName: 'run_code',
-          command: 'logs.search service=api status>=500 since=30m',
-          output: '142 hits · p95 latency 920ms · top path: /api/v1/payments',
-          isCompleted: true,
-        }],
-      },
-      {
-        label: 'Cross-checking recent deployments…',
-        isCompleted: true,
-        toolCalls: [{
-          toolName: 'run_code',
-          command: 'deploys.list service=api since=2h',
-          output: 'api-gateway@v2.14.3 rolled out 48m ago',
-          isCompleted: true,
-        }],
-      },
-    ];
-    let i = 0;
-    const pushStep = () => {
-      if (i >= stream.length) {
-        setTurns(ts => ts.map(t => t.id === rid ? { ...t, isStreaming: false } : t));
-        // Finally, add a new analysis turn.
-        setTurns(ts => [...ts, {
-          id: 'a' + Date.now(),
-          kind: 'analysis',
-          markdown: `### {{root_cause_analysis}}
-**Regression introduced by api-gateway@v2.14.3**
-
-The latest rollout of \`api-gateway\` shipped a change to connection-pool sizing that starves downstream payments calls under load, producing intermittent 500s on \`/api/v1/payments\`.
-
-### {{evidence}}
-Error-rate step-change aligns with deploy timestamp (48m ago). Pool saturation visible in \`db.pool.waiters\` jumping from 0 → 36. No infra events in the window.
-
-### {{proposed_solution}}
-- Roll back \`api-gateway\` to \`v2.14.2\` to restore previous pool sizing.
-- Raise \`DB_POOL_MAX\` from 20 → 48 for staging + prod to absorb peak.
-- Add a regression test covering pool saturation under 2× baseline RPS.
-- Open a follow-up ticket to review the deploy gating for \`api-gateway\`.`,
-        }]);
-        setBusy(false);
-        return;
-      }
-      const step = stream[i++];
-      setTurns(ts => ts.map(t => t.id === rid
-        ? { ...t, steps: [...t.steps, step] }
-        : t));
-      setTimeout(pushStep, 650);
-    };
-    setTimeout(pushStep, 350);
+    streamMockInvestigation({
+      event,
+      t,
+      setTurns,
+      setBusy,
+      scenario: 'reinvestigate',
+      appendAnalysis: true,
+    });
   };
 
   const runPostmortem = () => {
@@ -451,7 +438,8 @@ Error-rate step-change aligns with deploy timestamp (48m ago). Pool saturation v
 
   const hasCase = eventHasCase(event);
   const severityKey = resolveSeverityKey(event.severity, event.sev);
-  const investigationStages = hasCase ? mockInvestigationStages(event) : null;
+  const showInvestigationStages = hasCase && (event.mock_turns || event.mock_scenario || event._streamComplete);
+  const investigationStages = showInvestigationStages ? mockInvestigationStages(event) : null;
   const tabs = [
     { id: 'overview', label: t.alertDetail.overview, shortLabel: t.alertDetail.overview },
     { id: 'activity', label: t.alertDetail.activity, shortLabel: t.alertDetail.activity },
@@ -547,28 +535,38 @@ Error-rate step-change aligns with deploy timestamp (48m ago). Pool saturation v
         />
       </div>
 
-      {hasCase ? (
+      <div className="chat-panel__section--shrink">
+        <ChatPanelHeader
+          t={t}
+          feedbackValue={feedback}
+          onFeedback={handleFeedback}
+          feedbackEnabled={rcaHasBeenGenerated}
+          shareOpen={shareOpen}
+          setShareOpen={setShareOpen}
+          copied={copied}
+          alertSupportUrl={alertSupportUrl}
+          onCopyChat={() => {
+            navigator.clipboard.writeText(JSON.stringify(turns, null, 2));
+            setCopied(true);
+            setTimeout(() => {
+              setCopied(false);
+              setShareOpen(false);
+            }, 1500);
+          }}
+        />
+      </div>
+
+      {!hasCase ? (
+        <div className="chat-panel__scroll chat-panel__scroll--center">
+          <EmptyCaseState
+            t={t}
+            isUserAssigned={isUserAssigned}
+            isCreating={isCreatingCase}
+            onCreateCase={onCreateCase}
+          />
+        </div>
+      ) : (
         <>
-          <div className="chat-panel__section--shrink">
-            <ChatPanelHeader
-              t={t}
-              feedbackValue={feedback}
-              onFeedback={handleFeedback}
-              feedbackEnabled={rcaHasBeenGenerated}
-              shareOpen={shareOpen}
-              setShareOpen={setShareOpen}
-              copied={copied}
-              alertSupportUrl={alertSupportUrl}
-              onCopyChat={() => {
-                navigator.clipboard.writeText(JSON.stringify(turns, null, 2));
-                setCopied(true);
-                setTimeout(() => {
-                  setCopied(false);
-                  setShareOpen(false);
-                }, 1500);
-              }}
-            />
-          </div>
           <div ref={scrollRef} className="chat-panel__scroll">
             <div className="chat-panel__thread">
               {turns.map((turn, idx) => {
@@ -627,10 +625,6 @@ Error-rate step-change aligns with deploy timestamp (48m ago). Pool saturation v
             </div>
           </div>
         </>
-      ) : (
-        <div className="chat-panel__scroll chat-panel__scroll--center">
-          <EmptyCaseState event={event} t={t} onInvestigate={onInvestigate}/>
-        </div>
       )}
     </div>
   );
@@ -777,78 +771,127 @@ function CaseManagementHeader({ event, hasCase, t, assignOpen, setAssignOpen, on
         )}
       </div>
 
-      {hasCase && (
-        <div className="case-mgmt__assignees">
-          <span className="case-mgmt__users-icon" aria-hidden="true">
-            <IconUsers size={12}/>
-          </span>
-          <div className="case-mgmt__assignee-list">
-            {list.length > 0 ? (
-              list.map(a => {
-                const displayName = a.name || a.initials;
-                const initials = String(a.initials || displayName).slice(0, 2).toUpperCase();
-                return (
-                  <div key={a.initials} className="assignee-chip">
-                    <span className="assignee-chip__avatar">{initials}</span>
-                    <span className="assignee-chip__name">{displayName}</span>
-                    {onAssign && !cannotUnassignLast && (
-                      <button
-                        type="button"
-                        className="assignee-chip__remove"
-                        onClick={() => unassignOne(a.initials)}
-                        aria-label={displayName}
-                      >
-                        <IconClose size={12}/>
-                      </button>
-                    )}
-                  </div>
-                );
-              })
-            ) : (
-              <span className="case-mgmt__unassigned">{t.cases.noOneAssigned}</span>
-            )}
-          </div>
-          {onAssign && (
-            <div style={{ position:'relative' }}>
-              <button
-                type="button"
-                className="assign-to-btn"
-                onClick={() => setAssignOpen(o => !o)}
-                aria-expanded={assignOpen}
-              >
-                <IconPlus size={12}/> {t.alerts.assignTo}
-              </button>
-              {assignOpen && (
-                <>
-                  <div onClick={() => setAssignOpen(false)} style={{ position:'fixed', inset:0, zIndex:1 }}/>
-                  <div className="case-assign-popover">
-                    <AssigneePickerBody
-                      assigned={list}
-                      hasCase={hasCase}
-                      onToggle={u => onAssign({ toggle: u })}
-                    />
-                  </div>
-                </>
-              )}
-            </div>
+      <div className="case-mgmt__assignees">
+        <span className="case-mgmt__users-icon" aria-hidden="true">
+          <IconUsers size={12}/>
+        </span>
+        <div className="case-mgmt__assignee-list">
+          {list.length > 0 ? (
+            list.map(a => {
+              const displayName = a.name || a.initials;
+              const initials = String(a.initials || displayName).slice(0, 2).toUpperCase();
+              return (
+                <div key={a.initials} className="assignee-chip">
+                  <span className="assignee-chip__avatar">{initials}</span>
+                  <span className="assignee-chip__name">{displayName}</span>
+                  {onAssign && hasCase && !cannotUnassignLast && (
+                    <button
+                      type="button"
+                      className="assignee-chip__remove"
+                      onClick={() => unassignOne(a.initials)}
+                      aria-label={displayName}
+                    >
+                      <IconClose size={12}/>
+                    </button>
+                  )}
+                </div>
+              );
+            })
+          ) : (
+            <span className="case-mgmt__unassigned">{t.cases.noOneAssigned}</span>
           )}
         </div>
-      )}
+        {onAssign && (
+          <div style={{ position:'relative' }}>
+            <button
+              type="button"
+              className="assign-to-btn"
+              onClick={() => setAssignOpen(o => !o)}
+              aria-expanded={assignOpen}
+            >
+              <IconPlus size={12}/> {t.alerts.assignTo}
+            </button>
+            {assignOpen && (
+              <>
+                <div onClick={() => setAssignOpen(false)} style={{ position:'fixed', inset:0, zIndex:1 }}/>
+                <div className="case-assign-popover">
+                  <AssigneePickerBody
+                    assigned={list}
+                    hasCase={hasCase}
+                    onToggle={u => onAssign({ toggle: u })}
+                  />
+                </div>
+              </>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
 
-function SimpleTooltip({ content, children, className = '' }) {
+function SimpleTooltip({ content, children, className = '', maxWidth = 250 }) {
   const tipId = React.useId();
+  const triggerRef = React.useRef(null);
+  const [visible, setVisible] = React.useState(false);
+  const [coords, setCoords] = React.useState({ top: 0, left: 0 });
+
+  const updatePosition = React.useCallback(() => {
+    const el = triggerRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    setCoords({
+      top: rect.top - 8,
+      left: rect.left + rect.width / 2,
+    });
+  }, []);
+
+  const show = () => {
+    updatePosition();
+    setVisible(true);
+  };
+  const hide = () => setVisible(false);
+
+  React.useEffect(() => {
+    if (!visible) return undefined;
+    const onScrollOrResize = () => updatePosition();
+    window.addEventListener('scroll', onScrollOrResize, true);
+    window.addEventListener('resize', onScrollOrResize);
+    return () => {
+      window.removeEventListener('scroll', onScrollOrResize, true);
+      window.removeEventListener('resize', onScrollOrResize);
+    };
+  }, [visible, updatePosition]);
+
+  const portal = visible && typeof document !== 'undefined'
+    ? ReactDOM.createPortal(
+      <span
+        id={tipId}
+        role="tooltip"
+        className={'simple-tooltip__portal' + (className ? ' ' + className : '')}
+        style={{ top: coords.top, left: coords.left, maxWidth }}
+      >
+        {content}
+      </span>,
+      document.body,
+    )
+    : null;
+
   return (
-    <span className={'simple-tooltip' + (className ? ' ' + className : '')}>
-      <span className="simple-tooltip__trigger" aria-describedby={tipId}>
+    <>
+      <span
+        ref={triggerRef}
+        className="simple-tooltip__trigger-wrap"
+        onMouseEnter={show}
+        onMouseLeave={hide}
+        onFocus={show}
+        onBlur={hide}
+        aria-describedby={visible ? tipId : undefined}
+      >
         {children}
       </span>
-      <span className="simple-tooltip__content" id={tipId} role="tooltip">
-        {content}
-      </span>
-    </span>
+      {portal}
+    </>
   );
 }
 
@@ -924,7 +967,7 @@ function ChatPanelHeader({
             <span className="chat-support-link__label">{t.support.openAlertTicket}</span>
           </a>
         ) : null}
-        <SimpleTooltip content={helpfulTip}>
+        <SimpleTooltip content={helpfulTip} className="simple-tooltip--feedback">
           <button
             type="button"
             className={helpfulClass}
@@ -935,7 +978,7 @@ function ChatPanelHeader({
             <IconThumbsUp size={14}/>
           </button>
         </SimpleTooltip>
-        <SimpleTooltip content={notHelpfulTip}>
+        <SimpleTooltip content={notHelpfulTip} className="simple-tooltip--feedback">
           <button
             type="button"
             className={notHelpfulClass}
@@ -982,24 +1025,41 @@ function ChatPanelHeader({
   );
 }
 
-function EmptyCaseState({ event, t, onInvestigate }) {
+function EmptyCaseState({ t, isUserAssigned, isCreating, onCreateCase }) {
+  const iconWrapStyle = {
+    width: 64, height: 64, borderRadius: 9999, marginBottom: 16,
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    background: isUserAssigned
+      ? 'color-mix(in oklch, var(--primary) 10%, transparent)'
+      : 'var(--muted)',
+    border: isUserAssigned
+      ? '2px solid color-mix(in oklch, var(--primary) 20%, transparent)'
+      : '2px solid color-mix(in oklch, var(--muted-foreground) 20%, transparent)',
+    color: isUserAssigned ? 'var(--primary)' : 'var(--muted-foreground)',
+  };
+
   return (
     <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'32px 24px', textAlign:'center', minHeight:300 }}>
-      <div style={{
-        width:64, height:64, borderRadius:9999, marginBottom:16,
-        background:'color-mix(in oklch, var(--primary) 10%, transparent)',
-        border:'2px solid color-mix(in oklch, var(--primary) 20%, transparent)',
-        color:'var(--primary)', display:'flex', alignItems:'center', justifyContent:'center',
-      }}>
-        <IconBrainCircuit size={32}/>
+      <div style={iconWrapStyle}>
+        {isUserAssigned ? <IconBrainCircuit size={32}/> : <IconUserX size={32}/>}
       </div>
-      <div style={{ fontSize:18, fontWeight:600, marginBottom:6 }}>{t.cases.noCaseOpened}</div>
+      <div style={{ fontSize:18, fontWeight:600, marginBottom:6 }}>
+        {isUserAssigned ? t.cases.noCaseOpened : t.alertDetail.notAssigned}
+      </div>
       <p style={{ fontSize:14, color:'var(--muted-foreground)', maxWidth:280, lineHeight:1.5, margin:'0 0 20px' }}>
-        {t.alerts.createCaseDescription}
+        {isUserAssigned ? t.alerts.createCaseDescription : t.alertDetail.notAssignedDescription}
       </p>
-      <button type="button" className="btn btn--primary btn--sm" onClick={() => onInvestigate && onInvestigate(event)}>
-        <IconBrainCircuit size={14}/> {t.investigate.startInvestigation}
-      </button>
+      {isUserAssigned && (
+        <button
+          type="button"
+          className="btn btn--primary btn--sm"
+          disabled={isCreating}
+          onClick={() => onCreateCase && onCreateCase()}
+        >
+          <IconBrainCircuit size={14}/>
+          {isCreating ? t.common.loading : t.investigate.startInvestigation}
+        </button>
+      )}
     </div>
   );
 }
@@ -1368,9 +1428,13 @@ function normalizeReasoningSteps(steps) {
 
 function ReasoningDisplay({ steps, isStreaming, t }) {
   const normalized = normalizeReasoningSteps(steps);
-  const [isCollapsed, setIsCollapsed] = React.useState(false);
+  const [isCollapsed, setIsCollapsed] = React.useState(() => !isStreaming);
   const [expandedKey, setExpandedKey] = React.useState(null);
   const wasStreamingRef = React.useRef(isStreaming);
+
+  React.useEffect(() => {
+    if (isStreaming) setIsCollapsed(false);
+  }, [isStreaming]);
 
   React.useEffect(() => {
     if (wasStreamingRef.current && !isStreaming) setIsCollapsed(true);
@@ -1479,7 +1543,11 @@ function ReasoningDisplay({ steps, isStreaming, t }) {
                                   <div className="reasoning-tool__section-head">
                                     <IconTerminal size={12}/> {t.chat.query}
                                   </div>
-                                  <div className="reasoning-tool__query">{command}</div>
+                                  <div className="reasoning-tool__query">
+                                    {typeof renderTerminalQuery === 'function'
+                                      ? renderTerminalQuery(command)
+                                      : command}
+                                  </div>
                                 </>
                               )}
                               {output && (
@@ -1487,7 +1555,11 @@ function ReasoningDisplay({ steps, isStreaming, t }) {
                                   <div className="reasoning-tool__section-head">
                                     <IconTerminal size={12}/> {t.chat.output}
                                   </div>
-                                  <pre className="reasoning-tool__output">{output}</pre>
+                                  <pre className="reasoning-tool__output">
+                                    {typeof renderTerminalQuery === 'function'
+                                      ? renderTerminalQuery(output)
+                                      : output}
+                                  </pre>
                                 </>
                               )}
                             </div>
