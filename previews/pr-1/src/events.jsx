@@ -55,18 +55,29 @@ function AssigneeCell({ event, assignee, name }) {
   const apply = (payload) => {
     if (!event) return;
     let next = Array.isArray(event.assignees)
-      ? [...event.assignees]
-      : (event.assignee ? [{ initials: event.assignee, name: event.assigneeName || '' }] : []);
+      ? event.assignees.map(a => ({ ...a }))
+      : (event.assignee ? [{ initials: event.assignee, name: event.assigneeName || '', user_id: event.assignments?.[0]?.user_id }] : []);
     if (payload.clear) next = [];
     else if (payload.toggle) {
       const u = payload.toggle;
-      const idx = next.findIndex(a => a.initials === u.initials);
+      const seedUser = (window.USERS_SEED || []).find(s => s.initials === u.initials || s.id === u.id);
+      const entry = {
+        initials: u.initials || seedUser?.initials,
+        name: u.name || u.full_name || seedUser?.full_name,
+        user_id: u.id ?? seedUser?.id,
+      };
+      const idx = next.findIndex(a => a.initials === entry.initials);
       if (idx >= 0) next.splice(idx, 1);
-      else next.push({ initials: u.initials, name: u.name });
+      else next.push(entry);
     }
     event.assignees = next;
+    event.assignments = next.map(a => ({
+      user_id: a.user_id,
+      initials: a.initials,
+      full_name: a.name || a.full_name,
+    }));
     event.assignee = next[0]?.initials || null;
-    event.assigneeName = next[0]?.name || null;
+    event.assigneeName = next[0]?.name || next[0]?.full_name || null;
     setTick(n => n + 1);
   };
 
@@ -117,13 +128,7 @@ function AssigneeCell({ event, assignee, name }) {
       {open && (
         <>
           <div onClick={() => setOpen(false)} style={{ position:'fixed', inset:0, zIndex:20 }}/>
-          <div style={{
-            position:'absolute', top:'calc(100% + 4px)', left:0, zIndex:21,
-            width:280, maxHeight:340,
-            background:'var(--bg)', border:'1px solid var(--line-2)',
-            borderRadius:10, boxShadow:'0 20px 40px -8px rgba(0,0,0,0.25)',
-            display:'flex', flexDirection:'column', overflow:'hidden',
-          }}>
+          <div className="assignee-popover">
             <AssigneePickerBody
               assigned={list}
               hasCase={event?.case && event.case !== '—'}
@@ -239,7 +244,7 @@ function getSortValue(event, key) {
   }
 }
 
-function EventsTable({ events, onOpenDetail, onArchive, showArchived }) {
+function EventsTable({ events, onOpenDetail, onAnalyzeClick, onArchive, showArchived, creatingCaseIndex }) {
   const { t } = useI18n();
   const [sort, setSort] = React.useState(DEFAULT_TABLE_SORT);
   const [menuId, setMenuId] = React.useState(null);
@@ -297,6 +302,8 @@ function EventsTable({ events, onOpenDetail, onArchive, showArchived }) {
                   eventIndex={i}
                   showArchived={showArchived}
                   onOpenDetail={onOpenDetail}
+                  onAnalyzeClick={onAnalyzeClick}
+                  creatingCaseIndex={creatingCaseIndex}
                   onArchive={onArchive}
                 />
               );
@@ -348,6 +355,8 @@ function EventsTable({ events, onOpenDetail, onArchive, showArchived }) {
             ) : pageRows.map((e) => {
               const i = EVENTS.indexOf(e);
               const rowKey = e.id || i;
+              const canAnalyze = e.case_id == null;
+              const isCreatingCase = creatingCaseIndex === i;
               return (
                 <tr key={rowKey} className="events-table__row" style={{ borderBottom: '1px solid var(--line)' }}>
                   <td style={td}><SeverityBadge sev={e.sev} severity={e.severity}/></td>
@@ -355,13 +364,17 @@ function EventsTable({ events, onOpenDetail, onArchive, showArchived }) {
                   <td style={td}>
                     <button
                       type="button"
-                      onClick={() => onOpenDetail(i)}
-                      title={t.alerts.analyze}
+                      onClick={() => onAnalyzeClick && onAnalyzeClick(i)}
+                      title={canAnalyze ? t.alerts.investigate : t.alerts.viewRCA}
+                      disabled={!canAnalyze || isCreatingCase}
+                      data-testid="alert-row-investigate"
                       className="btn btn--ghost"
                       style={{
                         width: 44, height: 44, padding: 0,
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                         color: 'var(--primary)',
+                        opacity: canAnalyze && !isCreatingCase ? 1 : 0.5,
+                        cursor: canAnalyze && !isCreatingCase ? 'pointer' : 'not-allowed',
                       }}
                     >
                       <IconBrainCircuit size={28}/>
@@ -653,7 +666,7 @@ function advFilterCount(f) {
   );
 }
 
-function EventsPage({ onOpenDetail, currentUser }) {
+function EventsPage({ onOpenDetail, onAnalyzeClick, creatingCaseIndex, currentUser, onEventsChange }) {
   const { t } = useI18n();
   const [filter, setFilter] = React.useState('all');
   const [query, setQuery] = React.useState('');
@@ -733,37 +746,30 @@ function EventsPage({ onOpenDetail, currentUser }) {
         <button
           type="button"
           onClick={() => {
-      const titles = ['Disk Space Low', 'High API Error Rate', 'Memory Leak Detected', 'Network Latency Spike', 'SSL Certificate Expiring'];
-      const sevs = ['INFO', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
-      const components = ['storage', 'api', 'application', 'network', 'security'];
-      const sources = ['Prometheus', 'Datadog APM', 'Grafana', 'CloudWatch', 'Cert-Manager'];
-      const clients = ['Acme Corp', 'Globex', 'Initech'];
-      const projects = ['platform', 'payments', 'analytics'];
-      const envs = ['development', 'staging', 'production'];
-      const pick = arr => arr[Math.floor(Math.random() * arr.length)];
       const now = new Date();
       const stamp = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}, ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-      const title = pick(titles);
-      const n = EVENTS.length + 1;
       EVENTS.unshift(alertRow({
-        severity: pick(sevs),
+        id: 'fake-' + Date.now(),
+        severity: 'HIGH',
         alert_status: 'OPEN',
-        alert_name: title,
-        alert_description: `Auto-generated demo alert #${n}`,
-        component: pick(components),
-        source_client: pick(clients),
-        source_project: pick(projects),
-        source_environment: pick(envs),
-        source_name: pick(sources),
+        alert_name: 'Memory Leak Detected',
+        alert_description: 'Application memory usage growing steadily without garbage collection',
+        component: 'api-gateway',
+        source_client: 'Acme Corp',
+        source_project: 'gateway',
+        source_environment: 'qa',
+        source_name: 'Grafana',
+        source_host: 'api-gateway-02.example.com',
         created_at: stamp,
-        tags: [{ key: 'team', value: 'demo' }, { key: 'tag', value: 'fake' }],
-        case_id: 1000 + n,
-        case_status: 'AWAITING_ACTION',
-        agent_status: 'PENDING',
+        tags: [{ key: 'team', value: 'demo' }, { key: 'tag', value: 'fake' }, { key: 'tag', value: 'memory' }],
+        case_id: null,
+        case_status: null,
+        agent_status: null,
         assignments: [],
         archived: false,
       }));
       setNonce(x => x + 1);
+      onEventsChange && onEventsChange();
     }}
           className="btn btn--outline btn--sm events-page-header__action"
         >
@@ -810,12 +816,18 @@ function EventsPage({ onOpenDetail, currentUser }) {
 
       <ActiveFiltersBar filters={advFilters} onChange={setAdvFilters} myInitials={myInitials}/>
 
-      <EventsTable events={filtered} showArchived={showArchived} onOpenDetail={onOpenDetail}
+      <EventsTable
+        events={filtered}
+        showArchived={showArchived}
+        onOpenDetail={onOpenDetail}
+        onAnalyzeClick={onAnalyzeClick}
+        creatingCaseIndex={creatingCaseIndex}
         onArchive={(eventRow) => {
           const e = eventRow;
           if (!e) return;
           e.archived = !e.archived;
           setNonce(x => x + 1);
+          onEventsChange && onEventsChange();
         }}
       />
     </div>

@@ -18,7 +18,7 @@ function alertDetailsText(row) {
 
 function alertRow(o) {
   const assignments = o.assignments || (o.assignee ? [{
-    user_id: 1,
+    user_id: { DD: 1, FM: 2, MR: 3 }[o.assignee] ?? 1,
     initials: o.assignee,
     full_name: o.assigneeName || o.assignee,
   }] : []);
@@ -38,6 +38,7 @@ function alertRow(o) {
     source_project: o.source_project,
     source_environment: o.source_environment,
     source_name: o.source_name,
+    source_host: o.source_host ?? null,
     case_id: o.case_id,
     case_status: o.case_status,
     agent_status: o.agent_status ?? null,
@@ -61,6 +62,10 @@ function alertRow(o) {
     assignee: assignments[0]?.initials || null,
     assigneeName: assignments[0]?.full_name || null,
     assignees: assignments.map(a => ({ initials: a.initials, name: a.full_name })),
+    mock_turns: o.mock_turns,
+    mock_scenario: o.mock_scenario ?? null,
+    investigation_started: o.investigation_started ?? false,
+    _streamComplete: o._streamComplete ?? false,
   };
   return row;
 }
@@ -73,9 +78,11 @@ const ALERTS = [
     additional_details: 'Partition /var · Threshold 15% · Firing 12m',
     severity: 'INFO', alert_status: 'OPEN', component: 'storage',
     source_client: 'Acme Corp', source_project: 'platform', source_environment: 'development',
-    source_name: 'Prometheus', case_id: 9, case_status: 'AWAITING_ACTION', agent_status: 'PENDING',
+    source_name: 'Prometheus', source_host: 'storage-01.example.com',
+    case_id: 9, case_status: 'AWAITING_ACTION', agent_status: 'PENDING',
     created_at: '17/04/2026, 17:46', labels: ['platform', 'disk', 'prod'],
     assignee: 'FM', assigneeName: 'Francisca Molina',
+    mock_scenario: 'disk_space', _streamComplete: true,
   }),
   alertRow({
     id: '2', alert_name: 'High API Error Rate',
@@ -84,9 +91,11 @@ const ALERTS = [
     additional_details: 'Region eu-west-1 staging · Threshold 15% 5xx · Firing since 16:48 UTC',
     severity: 'LOW', alert_status: 'CLOSED', component: 'api',
     source_client: 'Acme Corp', source_project: 'payments', source_environment: 'staging',
-    source_name: 'Datadog APM', case_id: 8, case_status: 'AWAITING_ACTION', agent_status: 'COMPLETED',
+    source_name: 'Datadog APM', source_host: 'api-prod-03.example.com',
+    case_id: 8, case_status: 'AWAITING_ACTION', agent_status: 'COMPLETED',
     created_at: '17/04/2026, 16:59', labels: ['backend', 'api', 'payments'],
     assignee: 'DD', assigneeName: 'Daniel Dorado',
+    mock_scenario: 'api_errors', _streamComplete: true,
   }),
   alertRow({
     id: '3', alert_name: 'Memory Leak Detected',
@@ -95,9 +104,11 @@ const ALERTS = [
     additional_details: 'Pod api-gateway-7f8b9c · JVM heap trend +40MB/hr · No OOMKill yet',
     severity: 'HIGH', alert_status: 'FLAPPING', component: 'api-gateway',
     source_client: 'Acme Corp', source_project: 'gateway', source_environment: 'qa',
-    source_name: 'Grafana', case_id: 7, case_status: 'AWAITING_ACTION', agent_status: 'PROCESSING',
+    source_name: 'Grafana', source_host: 'api-gateway-02.example.com',
+    case_id: 7, case_status: 'AWAITING_ACTION', agent_status: 'PROCESSING',
     created_at: '17/04/2026, 16:55', labels: ['backend', 'gateway', 'memory'],
     assignee: 'DD', assigneeName: 'Daniel Dorado',
+    mock_scenario: 'memory_leak', _streamComplete: true,
   }),
   alertRow({
     id: '4', alert_name: 'Network Latency Spike',
@@ -106,9 +117,11 @@ const ALERTS = [
     additional_details: 'Path us-east-1 ↔ eu-west-1 · Baseline 45ms · Current p99 180ms',
     severity: 'MEDIUM', alert_status: 'CLOSED', component: 'network',
     source_client: 'Acme Corp', source_project: 'infra', source_environment: 'qa',
-    source_name: 'CloudWatch', case_id: 6, case_status: 'AWAITING_ACTION',
+    source_name: 'CloudWatch', source_host: 'router-eu-west-1.example.com',
+    case_id: 6, case_status: 'AWAITING_ACTION',
     created_at: '17/04/2026, 15:13', labels: ['infrastructure', 'network', 'xregion'],
     assignee: 'DD', assigneeName: 'Daniel Dorado',
+    mock_scenario: 'network_latency', _streamComplete: true,
   }),
   alertRow({
     id: '5', alert_name: 'SSL Certificate Expiring',
@@ -117,9 +130,11 @@ const ALERTS = [
     additional_details: 'Issuer Let\'s Encrypt · SAN *.example.com · Expires 22/04/2026',
     severity: 'INFO', alert_status: 'CLOSED', component: 'security',
     source_client: 'Acme Corp', source_project: 'security', source_environment: 'qa',
-    source_name: 'Cert-Manager', case_id: 5, case_status: 'CLOSED',
+    source_name: 'Cert-Manager', source_host: 'lb-01.example.com',
+    case_id: 5, case_status: 'CLOSED',
     created_at: '17/04/2026, 15:07', labels: ['backend', 'cert', 'dns'],
     assignee: 'DD', assigneeName: 'Daniel Dorado',
+    mock_scenario: 'ssl_expiring', _streamComplete: true,
   }),
   alertRow({
     id: '6', alert_name: 'Redis Cache Miss Rate High',
@@ -128,7 +143,8 @@ const ALERTS = [
     additional_details: 'Node redis-3 · Namespace web-prod · SLO hit ratio >85%',
     severity: 'OK', alert_status: 'OPEN', component: 'cache',
     source_client: '—', source_project: '—', source_environment: '—',
-    source_name: 'Datadog', case_id: null, case_status: null,
+    source_name: 'Datadog', source_host: 'redis-cluster-01.example.com',
+    case_id: null, case_status: null,
     created_at: '16/04/2026, 21:46', labels: ['infrastructure', 'cache', 'redis'],
   }),
   alertRow({
@@ -138,9 +154,11 @@ const ALERTS = [
     additional_details: 'Environment development · Peering acme-platform-dev · Duration 22m',
     severity: 'INFO', alert_status: 'CLOSED', component: 'network',
     source_client: 'Acme Corp', source_project: 'platform', source_environment: 'development',
-    source_name: 'CloudWatch', case_id: 4, case_status: 'AWAITING_ACTION',
+    source_name: 'CloudWatch', source_host: 'router-eu-west-1.example.com',
+    case_id: 4, case_status: 'AWAITING_ACTION',
     created_at: '16/04/2026, 21:17', labels: ['platform', 'network'],
     assignee: 'MR', assigneeName: 'Marelys Rodríguez',
+    mock_scenario: 'network_latency', _streamComplete: true,
   }),
   alertRow({
     id: '8', alert_name: 'High CPU Usage',
@@ -149,9 +167,11 @@ const ALERTS = [
     additional_details: 'Host web-prod-01.example.com · Threshold 90% · Load avg 12.4',
     severity: 'INFO', alert_status: 'ACK', component: 'compute',
     source_client: 'Acme Corp', source_project: 'backend', source_environment: 'qa',
-    source_name: 'Prometheus', case_id: 3, case_status: 'AWAITING_ACTION', agent_status: 'PROCESSING',
+    source_name: 'Prometheus', source_host: 'web-prod-01.example.com',
+    case_id: 3, case_status: 'AWAITING_ACTION', agent_status: 'PROCESSING',
     created_at: '16/04/2026, 18:23', labels: ['backend', 'cpu', 'prod'],
     assignee: 'DD', assigneeName: 'Daniel Dorado',
+    mock_scenario: 'high_cpu', _streamComplete: true,
   }),
   alertRow({
     id: '9', alert_name: 'Memory Leak Detected',
@@ -160,9 +180,11 @@ const ALERTS = [
     additional_details: 'Closed after rollback to v2.14.0 · Heap stable 4.1GB post-restart',
     severity: 'LOW', alert_status: 'CLOSED', component: 'api-gateway',
     source_client: 'Acme Corp', source_project: 'gateway', source_environment: 'qa',
-    source_name: 'Grafana', case_id: 2, case_status: 'AWAITING_ACTION',
+    source_name: 'Grafana', source_host: 'api-gateway-02.example.com',
+    case_id: 2, case_status: 'AWAITING_ACTION',
     created_at: '16/04/2026, 18:21', labels: ['backend', 'gateway', 'memory'],
     assignee: 'DD', assigneeName: 'Daniel Dorado',
+    mock_scenario: 'memory_leak', _streamComplete: true,
   }),
 ];
 

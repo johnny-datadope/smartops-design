@@ -1,76 +1,131 @@
-// Shared assignee picker: search input + selected-count header + togglable user rows.
-// Used by both the events table (AssigneeCell) and the event detail panel.
-//
-// Props:
-//   assigned: [{ initials, name }]       — current assignees for the event
-//   hasCase:  boolean                    — when true, the last remaining assignee is locked
-//   onToggle: (user) => void             — called with a USERS_SEED entry
-function AssigneePickerBody({ assigned, hasCase, onToggle }) {
+// Assignee picker — mirrors Apolo AssigneeSelector (search, “Assigned to me”, checkbox rows).
+
+function AssigneePickerBody({ assigned, hasCase, onToggle, footer }) {
+  const { t } = useI18n();
   const [query, setQuery] = React.useState('');
   const lockLast = hasCase && assigned.length === 1;
 
-  const rows = (window.USERS_SEED || [])
-    .filter(u => u.status === 'active')
-    .filter(u => !query || (u.name + u.email).toLowerCase().includes(query.toLowerCase()));
+  const sessionUser = React.useMemo(() => {
+    try {
+      const raw = localStorage.getItem('smartops.user');
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      return typeof getSessionUser === 'function' ? getSessionUser(parsed) : null;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const allUsers = (window.USERS_SEED || []).filter(u => u.status === 'active');
+
+  const normalized = query.trim().toLowerCase();
+  const matchesUser = (user) => {
+    if (!normalized) return true;
+    const fullName = (user.full_name || user.name || '').toLowerCase();
+    const username = (user.username || '').toLowerCase();
+    const email = (user.email || '').toLowerCase();
+    return fullName.includes(normalized)
+      || username.includes(normalized)
+      || email.includes(normalized);
+  };
+
+  const isSelected = (user) => assigned.some((a) =>
+    (user.id != null && a.user_id === user.id)
+    || a.initials === user.initials,
+  );
+
+  const sessionSeed = sessionUser
+    ? allUsers.find(u => u.id === sessionUser.id) || {
+      id: sessionUser.id,
+      full_name: sessionUser.full_name,
+      name: sessionUser.full_name,
+      initials: sessionUser.initials,
+      username: sessionUser.username,
+    }
+    : null;
+
+  const currentUserMatches = sessionSeed ? matchesUser(sessionSeed) : false;
+  const otherUsers = allUsers
+    .filter(u => u.id !== sessionSeed?.id)
+    .filter(matchesUser);
+  const hasAnyMatch = currentUserMatches || otherUsers.length > 0;
+  const hasUsers = allUsers.length > 0 || Boolean(sessionSeed);
+
+  const renderRow = (user, label, testId) => {
+    const selected = isSelected(user);
+    const disabled = lockLast && selected;
+    return (
+      <div
+        key={user.id || user.initials}
+        role="button"
+        tabIndex={disabled ? -1 : 0}
+        data-testid={testId}
+        data-user-id={user.id != null ? String(user.id) : undefined}
+        className={'assignee-selector__row' + (disabled ? ' is-disabled' : '')}
+        onClick={() => { if (!disabled) onToggle(user); }}
+        onKeyDown={(e) => {
+          if (disabled) return;
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onToggle(user);
+          }
+        }}
+      >
+        <span
+          className={'assignee-selector__checkbox' + (selected ? ' is-checked' : '')}
+          aria-hidden="true"
+        >
+          {selected ? <IconCheck size={14} sw={2.5}/> : null}
+        </span>
+        <span className="assignee-selector__label">{label}</span>
+      </div>
+    );
+  };
 
   return (
-    <>
-      <div style={{ padding:'8px 10px', borderBottom:'1px solid var(--line)' }}>
-        <input
-          autoFocus
-          value={query}
-          onChange={e => setQuery(e.target.value)}
-          placeholder="Search users…"
-          style={{
-            width:'100%', background:'var(--bg-2)',
-            border:'1px solid var(--line-2)', borderRadius:6,
-            padding:'6px 8px', fontSize:12, color:'var(--fg)', outline:'none',
-          }}
-        />
+    <div className="assignee-selector">
+      {hasUsers && (
+        <div className="assignee-selector__search-wrap">
+          <span className="assignee-selector__search-icon" aria-hidden="true">
+            <IconSearch size={14}/>
+          </span>
+          <input
+            type="search"
+            className="assignee-selector__search-input"
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            onClick={e => e.stopPropagation()}
+            onKeyDown={e => e.stopPropagation()}
+            placeholder={t.filters.searchUsers}
+            autoFocus
+          />
+        </div>
+      )}
+      <div className="assignee-selector__list">
+        {sessionSeed && currentUserMatches && (
+          <>
+            {renderRow(sessionSeed, t.filters.assignedToMe, 'assign-to-me')}
+            {otherUsers.length > 0 && <div className="assignee-selector__divider"/>}
+          </>
+        )}
+        {otherUsers.map(user => renderRow(
+          user,
+          user.full_name || user.name || user.username,
+          'assignee-option',
+        ))}
+        {!hasUsers && !hasAnyMatch && (
+          <div className="assignee-selector__empty">
+            {t.alertDetail.noUsersAvailable}
+          </div>
+        )}
+        {hasUsers && !hasAnyMatch && (
+          <div className="assignee-selector__empty">
+            {t.filters.noUsersFound}
+          </div>
+        )}
       </div>
-      <div style={{ padding:'6px 10px', fontSize:10.5, color:'var(--fg-4)', letterSpacing:'0.12em', textTransform:'uppercase', borderBottom:'1px solid var(--line)' }} className="mono">
-        {assigned.length} selected · click to toggle
-      </div>
-      <div style={{ overflowY:'auto', flex:1 }}>
-        {rows.map(u => {
-          const isSelected = assigned.some(a => a.initials === u.initials);
-          const disabled = lockLast && isSelected;
-          return (
-            <button key={u.id}
-              onClick={() => { if (!disabled) onToggle(u); }}
-              disabled={disabled}
-              title={disabled ? 'An open case must have at least one assignee.' : undefined}
-              style={{
-                width:'100%', display:'flex', alignItems:'center', gap:10,
-                padding:'8px 10px', border:0, borderBottom:'1px solid var(--line)',
-                background: isSelected ? 'var(--accent-glow)' : 'transparent',
-                cursor: disabled ? 'not-allowed' : 'pointer',
-                opacity: disabled ? 0.7 : 1,
-                textAlign:'left',
-              }}>
-              <div style={{
-                width:16, height:16, borderRadius:4,
-                border:`1.5px solid ${isSelected ? 'var(--accent)' : 'var(--line-2)'}`,
-                background: isSelected ? 'var(--accent)' : 'transparent',
-                display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0,
-              }}>
-                {isSelected && <IconCheck size={11} style={{ color:'#fff' }}/>}
-              </div>
-              <div style={{
-                width:22, height:22, borderRadius:99,
-                background:'linear-gradient(135deg, oklch(0.55 0.12 200), oklch(0.45 0.12 260))',
-                color:'#fff', fontSize:9.5, fontWeight:600,
-                display:'flex', alignItems:'center', justifyContent:'center',
-              }}>{u.initials}</div>
-              <div style={{ flex:1, minWidth:0, textAlign:'left' }}>
-                <div style={{ fontSize:12, color:'var(--fg)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{u.name}</div>
-                <div style={{ fontSize:10.5, color:'var(--fg-4)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{u.role}</div>
-              </div>
-            </button>
-          );
-        })}
-      </div>
-    </>
+      {footer}
+    </div>
   );
 }
 

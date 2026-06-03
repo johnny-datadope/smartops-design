@@ -15,6 +15,8 @@ function AlertMobileCard({
   eventIndex,
   showArchived,
   onOpenDetail,
+  onAnalyzeClick,
+  creatingCaseIndex,
   onArchive,
 }) {
   const { t } = useI18n();
@@ -25,6 +27,8 @@ function AlertMobileCard({
   const sevClass = ALERT_MOBILE_SEV_CLASS[sevKey] || 'alert-mobile-card--sev-muted';
 
   const caseLabel = event.case && event.case !== '—' ? event.case : null;
+  const canAnalyze = event.case_id == null;
+  const isCreatingCase = creatingCaseIndex === eventIndex;
 
   return (
     <article
@@ -110,10 +114,13 @@ function AlertMobileCard({
           <button
             type="button"
             className="btn btn--ghost btn--icon alert-mobile-card__analyze"
-            title={t.alerts.investigate}
+            title={canAnalyze ? t.alerts.investigate : t.alerts.viewRCA}
+            disabled={!canAnalyze || isCreatingCase}
+            data-testid="alert-row-investigate"
+            style={{ opacity: canAnalyze && !isCreatingCase ? 1 : 0.5 }}
             onClick={e => {
               e.stopPropagation();
-              onOpenDetail && onOpenDetail(eventIndex);
+              if (onAnalyzeClick) onAnalyzeClick(eventIndex);
             }}
           >
             <IconBrainCircuit size={20}/>
