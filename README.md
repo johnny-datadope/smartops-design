@@ -4,6 +4,19 @@ Static design prototype for the SmartOps UI, aligned with [Apolo](../chia/src/ap
 
 Published at https://johnny-datadope.github.io/smartops-design/
 
+## Deployment
+
+| Environment | URL | Trigger |
+|-------------|-----|---------|
+| **Production** | https://johnny-datadope.github.io/smartops-design/ | Push to `main` |
+| **PR preview** | `https://johnny-datadope.github.io/smartops-design/previews/pr-<N>/` | Open/update PR to `main` |
+
+- Production deploys via [`.github/workflows/deploy-production.yml`](.github/workflows/deploy-production.yml) to the `gh-pages` branch root (`keep_files: true` preserves active previews).
+- Each PR gets a public preview at `previews/pr-<number>/` via [`deploy-preview.yml`](.github/workflows/deploy-preview.yml); the workflow comments the URL on the PR (open mock at `…/previews/pr-<N>/#/events`).
+- When a PR closes, [`cleanup-preview.yml`](.github/workflows/cleanup-preview.yml) removes `previews/pr-<number>/` from `gh-pages`.
+
+**GitHub repo settings (one-time):** Pages → source **GitHub Actions**; Actions → workflow permissions **Read and write**.
+
 ## Run locally
 
 ```sh
@@ -35,7 +48,8 @@ src/
   chrome.jsx       # TopBar + UserMenu (Apolo-style)
   login.jsx
   events.jsx       # Events dashboard (KPIs, filters, table, pagination)
-  event_detail.jsx # 90vw modal, split-pane detail + AI chat
+  event_detail.jsx # full-page event detail modal, split-pane detail + AI chat
+  chat_markdown.jsx # AI analysis markdown rendering (Apolo-aligned)
   breakpoints.js     # 640/768/1024/1280 (sync with Apolo)
   use-mobile.js      # useIsMobile / useIsTablet / useIsDesktop
   form_select.jsx    # Apolo Select (forms + compact rows picker)
@@ -72,7 +86,7 @@ src/
 - [x] Table: Event Status, Customer, Time columns; assignee avatars; empty state
 - [x] Pagination: page numbers + rows selector
 - [x] Responsive: mobile nav drawer (&lt;768px), Events card list, Apolo breakpoints
-- [x] Modal: timeline, Overview comments, JSON payload, CaseManagement, ChatPanelHeader
+- [x] Modal: investigation timeline, Overview (Description + Additional Info), Comments tab, Activity tab, CaseManagement, ChatPanelHeader
 - [x] Admin Users / Usage: i18n, Password column, Cases KPI
 - [x] User menu: theme Light / Dark only (no System); logout copy; footer version
 - [x] Default locale es-ES; login i18n
