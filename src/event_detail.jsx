@@ -285,20 +285,33 @@ function EventDetail({ event, onClose, onInvestigate, onAssign, currentUser, ale
 
   // Reasoning thread — each turn is a kind + payload, rendered in order.
   const initialTurns = React.useMemo(() => ([
-    { id: 'r0', kind: 'reasoning', open: true, steps: [
-        { text: 'Analysing the alert and planning next steps…', code: null },
-        { text: 'Starting investigation…', code: '$ kubectl get pods -A -l app=api -o json\n  > unknown tool name: \'kubectl_impl\', available tools: [\'fnctl_*\', …]' },
+    { id: 'r0', kind: 'reasoning', isStreaming: false, steps: [
+      { label: 'Analysing the alert and planning next steps…', isCompleted: true, toolCalls: [] },
+      {
+        label: 'Starting investigation…',
+        isCompleted: true,
+        toolCalls: [{
+          toolName: 'run_code',
+          command: 'kubectl get pods -A -l app=api -o json',
+          output: "unknown tool name: 'kubectl_impl', available tools: ['fnctl_*', …]",
+          isCompleted: true,
+        }],
+      },
     ]},
     { id: 'a0', kind: 'analysis',
-      rca: { title: 'unknown: kubectl tool unavailable in this workspace',
-             body: <>The <code style={codeInline}>kubectl</code> tool is not available in this environment for inspecting pods, services, and events related to the <code style={codeInline}>/api/v1/payments</code> endpoint returning 500 errors.</> },
-      evidence: <>The MCP <code style={codeInline}>kubectl_impl</code> call failed; no direct cluster observability is reachable from this runner.</>,
-      solution: [
-        <>Verify <code style={codeInline}>kubectl</code> is configured and reachable for this operator.</>,
-        <>Once available, inspect pods of component <code style={codeInline}>api</code> with <code style={codeInline}>kubectl get pods -l app=api -o wide</code>.</>,
-        <>Review logs with <code style={codeInline}>kubectl logs &lt;pod&gt;</code> to identify 500 errors on <code style={codeInline}>/api/v1/payments</code>.</>,
-        <>Inspect recent events: <code style={codeInline}>kubectl get events --sort-by=.lastTimestamp</code>.</>,
-      ],
+      markdown: `### {{root_cause_analysis}}
+**unknown: kubectl tool unavailable in this workspace**
+
+The \`kubectl\` tool is not available in this environment for inspecting pods, services, and events related to the \`/api/v1/payments\` endpoint returning 500 errors.
+
+### {{evidence}}
+The MCP \`kubectl_impl\` call failed; no direct cluster observability is reachable from this runner.
+
+### {{proposed_solution}}
+- Verify \`kubectl\` is configured and reachable for this operator.
+- Once available, inspect pods of component \`api\` with \`kubectl get pods -l app=api -o wide\`.
+- Review logs with \`kubectl logs <pod>\` to identify 500 errors on \`/api/v1/payments\`.
+- Inspect recent events: \`kubectl get events --sort-by=.lastTimestamp\`.`,
     },
   ]), []);
   const [turns, setTurns] = React.useState(initialTurns);
@@ -325,27 +338,51 @@ function EventDetail({ event, onClose, onInvestigate, onAssign, currentUser, ale
     setBusy(true);
     const rid = 'r' + Date.now();
     // Push a new reasoning turn with empty steps, then stream-in each step.
-    setTurns(ts => [...ts, { id: rid, kind: 'reasoning', open: true, steps: [] }]);
+    setTurns(ts => [...ts, { id: rid, kind: 'reasoning', isStreaming: true, steps: [] }]);
     const stream = [
-      { text: 'Re-running the investigation with fresh signals…', code: null },
-      { text: 'Correlating the last 30m of logs and traces…', code: '$ logs.search service=api status>=500 since=30m\n  > 142 hits · p95 latency 920ms · top path: /api/v1/payments' },
-      { text: 'Cross-checking recent deployments…', code: '$ deploys.list service=api since=2h\n  > api-gateway@v2.14.3 rolled out 48m ago' },
+      { label: 'Re-running the investigation with fresh signals…', isCompleted: true, toolCalls: [] },
+      {
+        label: 'Correlating the last 30m of logs and traces…',
+        isCompleted: true,
+        toolCalls: [{
+          toolName: 'run_code',
+          command: 'logs.search service=api status>=500 since=30m',
+          output: '142 hits · p95 latency 920ms · top path: /api/v1/payments',
+          isCompleted: true,
+        }],
+      },
+      {
+        label: 'Cross-checking recent deployments…',
+        isCompleted: true,
+        toolCalls: [{
+          toolName: 'run_code',
+          command: 'deploys.list service=api since=2h',
+          output: 'api-gateway@v2.14.3 rolled out 48m ago',
+          isCompleted: true,
+        }],
+      },
     ];
     let i = 0;
     const pushStep = () => {
       if (i >= stream.length) {
+        setTurns(ts => ts.map(t => t.id === rid ? { ...t, isStreaming: false } : t));
         // Finally, add a new analysis turn.
         setTurns(ts => [...ts, {
-          id: 'a' + Date.now(), kind: 'analysis',
-          rca: { title: 'Regression introduced by api-gateway@v2.14.3',
-                 body: <>The latest rollout of <code style={codeInline}>api-gateway</code> shipped a change to connection-pool sizing that starves downstream payments calls under load, producing intermittent 500s on <code style={codeInline}>/api/v1/payments</code>.</> },
-          evidence: <>Error-rate step-change aligns with deploy timestamp (48m ago). Pool saturation visible in <code style={codeInline}>db.pool.waiters</code> jumping from 0 → 36. No infra events in the window.</>,
-          solution: [
-            <>Roll back <code style={codeInline}>api-gateway</code> to <code style={codeInline}>v2.14.2</code> to restore previous pool sizing.</>,
-            <>Raise <code style={codeInline}>DB_POOL_MAX</code> from 20 → 48 for staging + prod to absorb peak.</>,
-            <>Add a regression test covering pool saturation under 2× baseline RPS.</>,
-            <>Open a follow-up ticket to review the deploy gating for <code style={codeInline}>api-gateway</code>.</>,
-          ],
+          id: 'a' + Date.now(),
+          kind: 'analysis',
+          markdown: `### {{root_cause_analysis}}
+**Regression introduced by api-gateway@v2.14.3**
+
+The latest rollout of \`api-gateway\` shipped a change to connection-pool sizing that starves downstream payments calls under load, producing intermittent 500s on \`/api/v1/payments\`.
+
+### {{evidence}}
+Error-rate step-change aligns with deploy timestamp (48m ago). Pool saturation visible in \`db.pool.waiters\` jumping from 0 → 36. No infra events in the window.
+
+### {{proposed_solution}}
+- Roll back \`api-gateway\` to \`v2.14.2\` to restore previous pool sizing.
+- Raise \`DB_POOL_MAX\` from 20 → 48 for staging + prod to absorb peak.
+- Add a regression test covering pool saturation under 2× baseline RPS.
+- Open a follow-up ticket to review the deploy gating for \`api-gateway\`.`,
         }]);
         setBusy(false);
         return;
@@ -363,16 +400,19 @@ function EventDetail({ event, onClose, onInvestigate, onAssign, currentUser, ale
     if (busy) return;
     setBusy(true);
     const rid = 'r' + Date.now();
-    setTurns(ts => [...ts, { id: rid, kind: 'reasoning', open: true, steps: [] }]);
+    setTurns(ts => [...ts, { id: rid, kind: 'reasoning', isStreaming: true, steps: [] }]);
     const stream = [
-      { text: 'Drafting post-mortem…', code: null },
-      { text: 'Gathering timeline from alerts, deploys and comments…', code: null },
-      { text: 'Summarising impact and writing action items…', code: null },
+      { label: 'Drafting post-mortem…', isCompleted: true, toolCalls: [] },
+      { label: 'Gathering timeline from alerts, deploys and comments…', isCompleted: true, toolCalls: [] },
+      { label: 'Summarising impact and writing action items…', isCompleted: true, toolCalls: [] },
     ];
     let i = 0;
     const pushStep = () => {
       if (i >= stream.length) {
-        setTurns(ts => [...ts, { id: 'p' + Date.now(), kind: 'postmortem' }]);
+        setTurns(ts => [
+          ...ts.map(t => t.id === rid ? { ...t, isStreaming: false } : t),
+          { id: 'p' + Date.now(), kind: 'postmortem' },
+        ]);
         setBusy(false);
         return;
       }
@@ -446,7 +486,7 @@ function EventDetail({ event, onClose, onInvestigate, onAssign, currentUser, ale
   };
 
   const leftPanel = (
-    <div style={{ display:'flex', flexDirection:'column', minWidth:0, minHeight:0, overflow:'hidden', height:'100%' }}>
+    <div className="modal-split__panel">
       <div className="modal-left-fixed">
         <AlertModalHeader
           event={event}
@@ -494,62 +534,91 @@ function EventDetail({ event, onClose, onInvestigate, onAssign, currentUser, ale
   );
 
   const rightPanel = (
-    <div className="chat-panel">
-      <CaseManagementHeader
-        event={event}
-        hasCase={hasCase}
-        t={t}
-        assignOpen={assignOpen}
-        setAssignOpen={setAssignOpen}
-        onAssign={onAssign}
-      />
+    <div className="chat-panel chat-scroll">
+      <div className="chat-panel__section--shrink">
+        <CaseManagementHeader
+          event={event}
+          hasCase={hasCase}
+          t={t}
+          assignOpen={assignOpen}
+          setAssignOpen={setAssignOpen}
+          onAssign={onAssign}
+        />
+      </div>
 
       {hasCase ? (
         <>
-          <ChatPanelHeader
-            t={t}
-            feedbackValue={feedback}
-            onFeedback={handleFeedback}
-            feedbackEnabled={rcaHasBeenGenerated}
-            shareOpen={shareOpen}
-            setShareOpen={setShareOpen}
-            copied={copied}
-            alertSupportUrl={alertSupportUrl}
-            onCopyChat={() => {
-              navigator.clipboard.writeText(JSON.stringify(turns, null, 2));
-              setCopied(true);
-              setTimeout(() => setCopied(false), 2000);
-            }}
-          />
+          <div className="chat-panel__section--shrink">
+            <ChatPanelHeader
+              t={t}
+              feedbackValue={feedback}
+              onFeedback={handleFeedback}
+              feedbackEnabled={rcaHasBeenGenerated}
+              shareOpen={shareOpen}
+              setShareOpen={setShareOpen}
+              copied={copied}
+              alertSupportUrl={alertSupportUrl}
+              onCopyChat={() => {
+                navigator.clipboard.writeText(JSON.stringify(turns, null, 2));
+                setCopied(true);
+                setTimeout(() => {
+                  setCopied(false);
+                  setShareOpen(false);
+                }, 1500);
+              }}
+            />
+          </div>
           <div ref={scrollRef} className="chat-panel__scroll">
             <div className="chat-panel__thread">
-              {turns.map((turn) => (
-                <ThreadTurn key={turn.id} turn={turn} t={t} onToggle={() => {
-                  setTurns(ts => ts.map(item => item.id === turn.id ? { ...item, open: !item.open } : item));
-                }}/>
-              ))}
+              {turns.map((turn, idx) => {
+                if (turn.kind === 'analysis' && idx > 0 && turns[idx - 1].kind === 'reasoning') {
+                  return null;
+                }
+                if (turn.kind === 'reasoning' && turns[idx + 1]?.kind === 'analysis') {
+                  return (
+                    <ThreadTurnCombined
+                      key={turn.id}
+                      reasoning={turn}
+                      analysis={turns[idx + 1]}
+                      t={t}
+                    />
+                  );
+                }
+                return <ThreadTurn key={turn.id} turn={turn} t={t}/>;
+              })}
+              {busy && !turns.some(tr => tr.kind === 'thinking') && (
+                <AgentTypingIndicator/>
+              )}
             </div>
           </div>
-          <div className="chat-panel__footer">
-            <button type="button" onClick={runReinvestigate} disabled={busy} className="chat-footer-btn">
-              <IconRotateCcw size={14}/> {t.chat.reinvestigate}
-            </button>
-            <button type="button" onClick={runPostmortem} disabled={busy} className="chat-footer-btn">
-              <IconFileText size={14}/> {t.chat.postMortem}
-            </button>
-          </div>
-          <div className="chat-panel__input">
-            <ChatAgentInput
-              t={t}
-              value={aiInput}
-              onChange={setAiInput}
-              onSend={sendMessage}
-              disabled={busy}
-            />
+          <div className="chat-panel__hitl">
+            <div className="chat-panel__hitl-actions">
+              <SimpleTooltip content={t.chat.reinvestigateTooltip}>
+                <span tabIndex={busy ? 0 : undefined}>
+                  <button type="button" onClick={runReinvestigate} disabled={busy} className="chat-footer-btn">
+                    <IconRotateCcw size={14}/> {t.chat.reinvestigate}
+                  </button>
+                </span>
+              </SimpleTooltip>
+              <button type="button" onClick={runPostmortem} disabled={busy} className="chat-footer-btn">
+                <IconFileText size={14}/> {t.chat.postMortem}
+              </button>
+            </div>
+            <div className="chat-panel__hitl-input">
+              <ChatAgentInput
+                t={t}
+                value={aiInput}
+                onChange={setAiInput}
+                onSend={sendMessage}
+                disabled={busy}
+              />
+            </div>
           </div>
         </>
       ) : (
-        <EmptyCaseState event={event} t={t} onInvestigate={onInvestigate}/>
+        <div className="chat-panel__scroll chat-panel__scroll--center">
+          <EmptyCaseState event={event} t={t} onInvestigate={onInvestigate}/>
+        </div>
       )}
     </div>
   );
@@ -572,7 +641,7 @@ function EventDetail({ event, onClose, onInvestigate, onAssign, currentUser, ale
       </div>
       <div className="modal-mobile-body">
         {mobileView === 'detail' ? leftPanel : (
-          <div style={{ display:'flex', flexDirection:'column', minHeight:0, flex:1, background:'var(--bg-2)', padding:12 }}>
+          <div style={{ display:'flex', flexDirection:'column', minHeight:0, flex:1, background:'var(--background)' }}>
             {rightPanel}
           </div>
         )}
@@ -607,7 +676,7 @@ function EventDetail({ event, onClose, onInvestigate, onAssign, currentUser, ale
 
   if (isMaximized) {
     return (
-      <div style={{ position:'fixed', inset:0, zIndex:40, background:'var(--background)' }}>
+      <div className="modal-fullscreen">
         {shell}
       </div>
     );
@@ -825,6 +894,9 @@ function ChatPanelHeader({
       </div>
       <div className="chat-panel-header__title">
         <h3>{t.chat.aiAssistant}</h3>
+        {t.chat.aiAssistantDescription ? (
+          <p className="chat-panel-header__desc">{t.chat.aiAssistantDescription}</p>
+        ) : null}
       </div>
       <div className="chat-panel-header__actions">
         {alertSupportUrl ? (
@@ -837,6 +909,7 @@ function ChatPanelHeader({
             aria-label={t.support.openAlertTicket}
           >
             <IconLifeBuoy size={14}/>
+            <span className="chat-support-link__label">{t.support.openAlertTicket}</span>
           </a>
         ) : null}
         <SimpleTooltip content={helpfulTip}>
@@ -870,7 +943,7 @@ function ChatPanelHeader({
             aria-expanded={shareOpen}
           >
             <IconShare size={14}/>
-            <span>{t.rca.share}</span>
+            <span className="chat-share-btn__label">{t.rca.share}</span>
           </button>
           {shareOpen && (
             <>
@@ -881,7 +954,7 @@ function ChatPanelHeader({
                   type="button"
                   className={'chat-share-menu__item' + (copied ? ' is-copied' : '')}
                   role="menuitem"
-                  onClick={() => { onCopyChat(); setShareOpen(false); }}
+                  onClick={onCopyChat}
                 >
                   <span className="chat-share-menu__item-icon" aria-hidden="true">
                     {copied ? <IconCheck size={16}/> : <IconCopy size={16}/>}
@@ -995,29 +1068,23 @@ function ChatAgentInput({ t, value, onChange, onSend, disabled }) {
   };
 
   return (
-    <div className={'comment-composer' + (disabled ? ' is-disabled' : '')}>
-      <div
-        className="comment-composer__scroll"
-        data-slot="scroll-area"
-        style={{ height: editorHeight }}
-      >
-        <div className="comment-composer__scroll-viewport" data-slot="scroll-area-viewport">
-          <textarea
-            ref={textareaRef}
-            className="comment-composer__textarea comment-composer__textarea--chat"
-            value={value}
-            onChange={e => onChange(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder={t.chat.askPlaceholder}
-            rows={1}
-            disabled={disabled}
-            aria-label={t.chat.askPlaceholder}
-          />
-        </div>
+    <div className={'chat-input-composer' + (disabled ? ' is-disabled' : '')}>
+      <div className="chat-input-composer__field-wrap" style={{ height: editorHeight }}>
+        <textarea
+          ref={textareaRef}
+          className="chat-input-composer__textarea"
+          value={value}
+          onChange={e => onChange(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder={t.chat.askPlaceholder}
+          rows={1}
+          disabled={disabled}
+          aria-label={t.chat.askPlaceholder}
+        />
       </div>
       <button
         type="button"
-        className="comment-composer__send"
+        className="chat-input-composer__send"
         onClick={onSend}
         disabled={!canSend}
         aria-label={t.chat.sendMessage}
@@ -1268,7 +1335,192 @@ function MiniBtn({ icon, label, raw, active, onClick, tone }) {
   );
 }
 
-// ----- reasoning thread -----
+// ----- AI chat thread (mirrors chia ChatMessageBubble + ReasoningDisplay) -----
+
+function normalizeReasoningSteps(steps) {
+  if (!steps?.length) return [];
+  return steps.map((s) => {
+    if (s.label != null) return s;
+    return {
+      label: s.text || '',
+      isCompleted: true,
+      toolCalls: s.code ? [{
+        toolName: 'run_code',
+        command: String(s.code).replace(/^\$\s*/, '').split('\n')[0].trim(),
+        output: String(s.code).includes('\n') ? String(s.code).split('\n').slice(1).join('\n').trim() : undefined,
+        isCompleted: true,
+      }] : [],
+    };
+  });
+}
+
+function ReasoningDisplay({ steps, isStreaming, t }) {
+  const normalized = normalizeReasoningSteps(steps);
+  const [isCollapsed, setIsCollapsed] = React.useState(false);
+  const [expandedKey, setExpandedKey] = React.useState(null);
+  const wasStreamingRef = React.useRef(isStreaming);
+
+  React.useEffect(() => {
+    if (wasStreamingRef.current && !isStreaming) setIsCollapsed(true);
+    wasStreamingRef.current = isStreaming;
+  }, [isStreaming]);
+
+  if (normalized.length === 0 && !isStreaming) return null;
+
+  const completedCount = normalized.filter(s => s.isCompleted).length;
+  const activeStep = isStreaming
+    ? [...normalized].reverse().find(s => !s.isCompleted) ?? normalized[normalized.length - 1]
+    : null;
+
+  const activeToolCall = (() => {
+    if (!isStreaming) return null;
+    for (let i = normalized.length - 1; i >= 0; i--) {
+      const tcs = normalized[i].toolCalls || [];
+      if (!tcs.length) continue;
+      const pending = [...tcs].reverse().find(tc => !tc.isCompleted);
+      return pending || tcs[tcs.length - 1];
+    }
+    return null;
+  })();
+
+  return (
+    <div className="reasoning-display">
+      <button
+        type="button"
+        className={'reasoning-display__toggle' + (isStreaming ? ' is-streaming' : '')}
+        onClick={() => setIsCollapsed(v => !v)}
+      >
+        <div className="reasoning-display__toggle-row">
+          <IconChevron
+            size={14}
+            className={'reasoning-display__chevron' + (isCollapsed ? '' : ' is-open')}
+          />
+          <span className="reasoning-display__title">
+            {isStreaming ? t.chat.reasoningActive : t.chat.reasoning}
+          </span>
+          {isStreaming ? (
+            <span className="reasoning-display__streaming-dots" aria-hidden="true">
+              <span/><span/><span/>
+            </span>
+          ) : (
+            <span className="reasoning-display__count">
+              {t.chat.reasoningStepCount.replace('{count}', String(completedCount))}
+            </span>
+          )}
+        </div>
+        {isStreaming && activeStep && (
+          <div className="reasoning-display__preview">
+            <span className="reasoning-display__preview-label">{activeStep.label}</span>
+            {activeToolCall && (
+              <span className="reasoning-display__preview-cmd">
+                <strong>{activeToolCall.toolName}</strong> {activeToolCall.command}
+              </span>
+            )}
+          </div>
+        )}
+      </button>
+
+      {!isCollapsed && (
+        <div className="reasoning-display__timeline">
+          {normalized.map((step, stepIdx) => {
+            const isLastStep = stepIdx === normalized.length - 1;
+            const isActive = isLastStep && isStreaming && !step.isCompleted;
+            return (
+              <div key={stepIdx} className="reasoning-step">
+                <div className={'reasoning-step__dot' + (isActive ? ' reasoning-step__dot--active' : step.isCompleted ? ' reasoning-step__dot--done' : ' reasoning-step__dot--pending')}>
+                  {step.isCompleted && !isActive ? <IconCheck size={8}/> : isActive ? <span className="reasoning-step__dot--pending"/> : null}
+                </div>
+                <p className={'reasoning-step__label' + (isActive ? ' is-active' : '')}>{step.label}</p>
+                {(step.toolCalls || []).length > 0 && (
+                  <div className="reasoning-step__tools">
+                    {(step.toolCalls || []).map((tc, tcIdx) => {
+                      const key = `${stepIdx}-${tcIdx}`;
+                      const isOutExpanded = expandedKey === key;
+                      const command = (tc.command || '').replace(/\\n/g, '\n');
+                      const commandPreview = command.split('\n')[0].trim();
+                      const output = (tc.output || '').replace(/\\n/g, '\n');
+                      const hasDetails = Boolean(command || output);
+                      return (
+                        <div key={tcIdx} className="reasoning-tool">
+                          <button
+                            type="button"
+                            className="reasoning-tool__head"
+                            disabled={!hasDetails}
+                            aria-expanded={hasDetails ? isOutExpanded : undefined}
+                            onClick={() => hasDetails && setExpandedKey(isOutExpanded ? null : key)}
+                          >
+                            {hasDetails ? (
+                              <IconChevron size={10} className={'reasoning-display__chevron' + (isOutExpanded ? ' is-open' : '')}/>
+                            ) : (
+                              <IconTerminal size={10}/>
+                            )}
+                            <span className="reasoning-tool__prompt">&gt;</span>
+                            <span className="reasoning-tool__badge">{tc.toolName}</span>
+                            {commandPreview ? (
+                              <span className="reasoning-tool__cmd-preview">{commandPreview}</span>
+                            ) : null}
+                          </button>
+                          {hasDetails && isOutExpanded && (
+                            <div className="reasoning-tool__body">
+                              {command && (
+                                <>
+                                  <div className="reasoning-tool__section-head">
+                                    <IconTerminal size={12}/> {t.chat.query}
+                                  </div>
+                                  <div className="reasoning-tool__query">{command}</div>
+                                </>
+                              )}
+                              {output && (
+                                <>
+                                  <div className="reasoning-tool__section-head">
+                                    <IconTerminal size={12}/> {t.chat.output}
+                                  </div>
+                                  <pre className="reasoning-tool__output">{output}</pre>
+                                </>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AgentMessageShell({ children }) {
+  return (
+    <div className="chat-msg so-turn">
+      <div className="chat-msg__avatar" aria-hidden="true">
+        <IconBrainCircuit size={14}/>
+      </div>
+      <div className="chat-msg__body">
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function AgentTypingIndicator() {
+  return (
+    <div className="chat-msg so-turn">
+      <div className="chat-msg__avatar" aria-hidden="true">
+        <IconBrainCircuit size={14}/>
+      </div>
+      <div className="chat-msg__bubble chat-msg__bubble--agent">
+        <div className="reasoning-display__streaming-dots" style={{ gap: '6px' }}>
+          <span style={{ width: 6, height: 6 }}/><span style={{ width: 6, height: 6 }}/><span style={{ width: 6, height: 6 }}/>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 /** User message bubble — mirrors chia ChatMessageBubble (role USER). */
 function ChatUserMessage({ content }) {
@@ -1286,55 +1538,40 @@ function ChatUserMessage({ content }) {
   );
 }
 
-function ThreadTurn({ turn, onToggle, t }) {
+function AnalysisContent({ turn, t }) {
+  return <ChatMarkdownBubble turn={turn} t={t}/>;
+}
+
+function ThreadTurnCombined({ reasoning, analysis, t }) {
+  return (
+    <AgentMessageShell>
+      <ReasoningDisplay steps={reasoning.steps} isStreaming={!!reasoning.isStreaming} t={t}/>
+      <AnalysisContent turn={analysis} t={t}/>
+    </AgentMessageShell>
+  );
+}
+
+function ThreadTurn({ turn, t }) {
   if (turn.kind === 'reasoning') {
     return (
-      <div className="so-turn" style={{ marginBottom:18 }}>
-        <button onClick={onToggle} style={{
-          display:'flex', alignItems:'center', gap:8, marginBottom:8, color:'var(--fg)',
-          background:'transparent', border:0, padding:0, cursor:'pointer',
-        }}>
-          <IconChevron size={12} style={{ transform: turn.open ? 'rotate(90deg)' : 'none', color:'var(--fg-3)', transition:'transform .15s' }}/>
-          <IconBrainCircuit size={14} style={{ color:'var(--primary)' }}/>
-          <span style={{ fontSize:12.5, fontWeight:500 }}>{t.chat.reasoning}</span>
-          <span className="mono" style={{ fontSize:10, color:'var(--fg-4)' }}>{turn.steps.length} step{turn.steps.length === 1 ? '' : 's'}</span>
-        </button>
-        {turn.open && (
-          <div style={{ fontSize:12.5, color:'var(--fg-2)', lineHeight:1.6, paddingLeft:20, borderLeft:'1px solid var(--line)', marginLeft:5 }}>
-            {turn.steps.map((s, i) => (
-              <div key={i} className="so-step" style={{ marginBottom:8 }}>
-                <p style={{ margin:0 }}>{s.text}</p>
-                {s.code && <CodeBlock>{s.code}</CodeBlock>}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+      <AgentMessageShell>
+        <ReasoningDisplay steps={turn.steps} isStreaming={!!turn.isStreaming} t={t}/>
+      </AgentMessageShell>
     );
   }
 
   if (turn.kind === 'analysis') {
     return (
-      <div className="so-turn" style={{ marginBottom:18 }}>
-        <Section title="Root Cause Analysis">
-          <p style={{ margin:'0 0 8px', fontWeight:500 }}>{turn.rca.title}</p>
-          <p style={{ margin:0, color:'var(--fg-2)' }}>{turn.rca.body}</p>
-        </Section>
-        <Section title="Evidence">
-          <p style={{ margin:0, color:'var(--fg-2)' }}>{turn.evidence}</p>
-        </Section>
-        <Section title="Proposed Solution">
-          <ul style={{ margin:0, paddingLeft:16, color:'var(--fg-2)' }}>
-            {turn.solution.map((item, i) => <li key={i} style={{ marginBottom:4 }}>{item}</li>)}
-          </ul>
-        </Section>
-      </div>
+      <AgentMessageShell>
+        <AnalysisContent turn={turn} t={t}/>
+      </AgentMessageShell>
     );
   }
 
   if (turn.kind === 'postmortem') {
     return (
-      <div className="so-turn" style={{ marginBottom:18 }}>
+      <AgentMessageShell>
+        <div className="chat-msg__bubble chat-msg__bubble--agent">
         <Section title="Post-mortem">
           <div style={{ fontSize:11, color:'var(--fg-3)', marginBottom:6 }} className="mono">DRAFT · GENERATED BY SMART OPS AI</div>
           <p style={{ margin:'0 0 10px', fontWeight:500 }}>Payments 500s triggered by api-gateway v2.14.3 pool regression</p>
@@ -1363,7 +1600,8 @@ function ThreadTurn({ turn, onToggle, t }) {
             <li>Alert when <code style={codeInline}>db.pool.waiters</code> &gt; 10 for 2m.</li>
           </ul>
         </Section>
-      </div>
+        </div>
+      </AgentMessageShell>
     );
   }
 
@@ -1373,30 +1611,16 @@ function ThreadTurn({ turn, onToggle, t }) {
 
   if (turn.kind === 'assistant') {
     return (
-      <div className="so-turn" style={{ display:'flex', gap:8, marginBottom:14, alignItems:'flex-start' }}>
-        <div style={{
-          width:24, height:24, borderRadius:99, flexShrink:0,
-          background:'color-mix(in oklch, var(--primary) 15%, transparent)', border:'1px solid color-mix(in oklch, var(--primary) 30%, transparent)',
-          color:'var(--primary)', display:'flex', alignItems:'center', justifyContent:'center',
-        }}><IconBrainCircuit size={12}/></div>
-        <div style={{ fontSize:12.5, lineHeight:1.6, color:'var(--fg-2)', paddingTop:3 }}>{turn.text}</div>
-      </div>
+      <AgentMessageShell>
+        <div className="chat-msg__bubble chat-msg__bubble--agent">
+          <p className="chat-msg__prose chat-prose">{turn.text}</p>
+        </div>
+      </AgentMessageShell>
     );
   }
 
   if (turn.kind === 'thinking') {
-    return (
-      <div className="so-turn" style={{ display:'flex', gap:8, marginBottom:14, alignItems:'center' }}>
-        <div style={{
-          width:24, height:24, borderRadius:99, flexShrink:0,
-          background:'color-mix(in oklch, var(--primary) 15%, transparent)', border:'1px solid color-mix(in oklch, var(--primary) 30%, transparent)',
-          color:'var(--primary)', display:'flex', alignItems:'center', justifyContent:'center',
-        }}><IconBrainCircuit size={12}/></div>
-        <div className="so-think" style={{ paddingTop:2 }}>
-          <span/><span/><span/>
-        </div>
-      </div>
-    );
+    return <AgentTypingIndicator/>;
   }
 
   return null;
