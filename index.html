@@ -25,6 +25,8 @@
     --accent-foreground: oklch(0.98 0 0);
     --primary: oklch(0.65 0.13 237);
     --primary-foreground: oklch(0.18 0.04 231);
+    /* Tailwind dark:bg-input/30 */
+    --input-30: oklch(from var(--input) l c h / 0.3);
     --ring: oklch(0.65 0.13 237);
     --destructive: oklch(0.65 0.24 358);
     --destructive-foreground: oklch(0.98 0 0);
@@ -1823,6 +1825,14 @@
     opacity: 1;
     visibility: visible;
   }
+  /* Apolo TooltipContent (reinvestigate): side=top, max-w-[250px] text-center */
+  .simple-tooltip--hitl .simple-tooltip__content {
+    bottom: calc(100% + 4px);
+    max-width: 250px;
+    padding: 0.375rem 0.75rem;
+    font-size: 0.75rem;
+    text-wrap: balance;
+  }
   /* Chia chat-panel-header alert support link */
   @media (min-width: 768px) {
     .chat-feedback-btn { width: 2rem; height: 2rem; }
@@ -2094,33 +2104,51 @@
     flex-wrap: wrap;
     gap: 0.5rem;
   }
-  /* Chia Button variant=outline size=sm (button.tsx) */
+  /* Apolo Button outline sm — dark:hover:bg-accent dark:hover:text-accent-foreground wins over footer primary classes */
   .chat-footer-btn {
-    display: inline-flex; align-items: center; gap: 6px;
-    height: 28px; padding: 0 12px; border-radius: 0.375rem;
-    font-size: 11px; font-weight: 500; font-family: inherit;
-    cursor: pointer; color: var(--foreground);
-    background: color-mix(in oklch, var(--input) 30%, transparent);
-    border: 1px solid var(--input);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.375rem;
+    height: 1.75rem;
+    padding: 0 0.75rem;
+    border-radius: 0.375rem;
+    font-size: 11px;
+    font-weight: 500;
+    font-family: inherit;
+    line-height: 1;
+    white-space: nowrap;
+    cursor: pointer;
+    color: var(--foreground);
+    background: var(--background);
+    border: 1px solid var(--border);
     box-shadow: var(--shadow-xs);
-    transition: background 0.15s, color 0.15s, border-color 0.15s;
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
   }
-  .chat-footer-btn:hover:not(:disabled) {
-    background: color-mix(in oklch, var(--primary) 10%, transparent);
-    color: var(--primary);
-    border-color: color-mix(in oklch, var(--primary) 50%, transparent);
+  .chat-footer-btn svg {
+    flex-shrink: 0;
+    color: inherit;
+  }
+  [data-theme="dark"] .chat-footer-btn {
+    background: var(--input-30);
+    border-color: var(--input);
+  }
+  .chat-footer-btn:not(:disabled):hover {
+    background: var(--accent);
+    color: var(--accent-foreground);
+  }
+  [data-theme="dark"] .chat-footer-btn:not(:disabled):hover {
+    border-color: var(--input);
   }
   .chat-footer-btn:disabled {
-    opacity: 0.4; cursor: not-allowed; pointer-events: none;
+    opacity: 0.4;
+    cursor: not-allowed;
+    pointer-events: none;
   }
-  [data-theme="light"] .chat-footer-btn {
-    background: var(--background);
-    border-color: var(--border);
-  }
-  [data-theme="light"] .chat-footer-btn:hover:not(:disabled) {
-    background: color-mix(in oklch, var(--primary) 10%, transparent);
-    color: var(--primary);
-    border-color: color-mix(in oklch, var(--primary) 50%, transparent);
+  .chat-footer-btn:not(:disabled):focus-visible {
+    outline: none;
+    border-color: var(--ring);
+    box-shadow: 0 0 0 3px oklch(from var(--ring) l c h / 0.5);
   }
   .chat-panel__hitl-input {
     padding: 0.5rem 0.75rem 0.75rem;

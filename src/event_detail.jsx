@@ -326,6 +326,7 @@ The MCP \`kubectl_impl\` call failed; no direct cluster observability is reachab
   }, [turns]);
 
   const rcaHasBeenGenerated = turns.some(t => t.kind === 'analysis');
+  const canReinvestigate = turns.some(t => t.kind === 'user');
 
   const handleFeedback = (type) => {
     if (!rcaHasBeenGenerated) return;
@@ -593,13 +594,24 @@ Error-rate step-change aligns with deploy timestamp (48m ago). Pool saturation v
           </div>
           <div className="chat-panel__hitl">
             <div className="chat-panel__hitl-actions">
-              <SimpleTooltip content={t.chat.reinvestigateTooltip}>
-                <span tabIndex={busy ? 0 : undefined}>
-                  <button type="button" onClick={runReinvestigate} disabled={busy} className="chat-footer-btn">
-                    <IconRotateCcw size={14}/> {t.chat.reinvestigate}
-                  </button>
-                </span>
-              </SimpleTooltip>
+              {!canReinvestigate && !busy ? (
+                <SimpleTooltip content={t.chat.reinvestigateTooltip} className="simple-tooltip--hitl">
+                  <span tabIndex={0}>
+                    <button type="button" disabled className="chat-footer-btn">
+                      <IconRotateCcw size={14}/> {t.chat.reinvestigate}
+                    </button>
+                  </span>
+                </SimpleTooltip>
+              ) : canReinvestigate ? (
+                <button
+                  type="button"
+                  onClick={runReinvestigate}
+                  disabled={busy}
+                  className="chat-footer-btn"
+                >
+                  <IconRotateCcw size={14}/> {t.chat.reinvestigate}
+                </button>
+              ) : null}
               <button type="button" onClick={runPostmortem} disabled={busy} className="chat-footer-btn">
                 <IconFileText size={14}/> {t.chat.postMortem}
               </button>
@@ -826,10 +838,10 @@ function CaseManagementHeader({ event, hasCase, t, assignOpen, setAssignOpen, on
   );
 }
 
-function SimpleTooltip({ content, children }) {
+function SimpleTooltip({ content, children, className = '' }) {
   const tipId = React.useId();
   return (
-    <span className="simple-tooltip">
+    <span className={'simple-tooltip' + (className ? ' ' + className : '')}>
       <span className="simple-tooltip__trigger" aria-describedby={tipId}>
         {children}
       </span>
