@@ -7,8 +7,9 @@ on:
 permissions:
   contents: write
 
+# Serialize all gh-pages writes (prod, previews, cleanup) to avoid ref lock conflicts.
 concurrency:
-  group: pages-production
+  group: gh-pages-deploy
   cancel-in-progress: false
 
 jobs:
@@ -16,6 +17,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Deploy to gh-pages root
         uses: peaceiris/actions-gh-pages@v4

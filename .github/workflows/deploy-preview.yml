@@ -9,15 +9,18 @@ permissions:
   contents: write
   pull-requests: write
 
+# Same lock as production/cleanup — peaceiris cannot push gh-pages concurrently.
 concurrency:
-  group: pages-preview-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
+  group: gh-pages-deploy
+  cancel-in-progress: false
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Deploy preview to gh-pages
         uses: peaceiris/actions-gh-pages@v4
