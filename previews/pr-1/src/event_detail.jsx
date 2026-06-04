@@ -1359,17 +1359,24 @@ function AdditionalInfoSection({ event, t }) {
     setTimeout(() => setCopied(false), 2000);
   };
   return (
-    <div className="json-payload-card">
-      <div className="json-payload-card__header">
-        <div className="json-payload-card__header-main">
-          <div className="json-payload-card__icon"><IconDatabase size={14}/></div>
-          <span className="json-payload-card__title">{t.alertDetail.jsonPayload}</span>
+    <div className="card overview-card">
+      <div className="overview-card__head">
+        <div className="overview-card__head-icon" aria-hidden="true">
+          <IconDatabase size={14}/>
         </div>
-        <button type="button" className="btn btn--ghost btn--sm" onClick={handleCopy}>
-          {copied ? <><IconCheck size={12}/> {t.common.copied}</> : <><IconCopy size={12}/> {t.common.copy}</>}
-        </button>
+        <h3 className="overview-card__head-title">{t.alertDetail.additionalInfo}</h3>
       </div>
-      <pre className="json-payload-card__body mono">{jsonString}</pre>
+      <div className="overview-card__body">
+        <div className="json-payload-card">
+          <div className="json-payload-card__header">
+            <span className="json-payload-card__title">{t.alertDetail.jsonPayload}</span>
+            <button type="button" className="btn btn--ghost btn--sm" onClick={handleCopy}>
+              {copied ? <><IconCheck size={12}/> {t.common.copied}</> : <><IconCopy size={12}/> {t.common.copy}</>}
+            </button>
+          </div>
+          <pre className="json-payload-card__body mono">{jsonString}</pre>
+        </div>
+      </div>
     </div>
   );
 }
