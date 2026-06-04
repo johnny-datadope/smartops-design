@@ -324,7 +324,7 @@ function EventsTable({ events, onOpenDetail, onAnalyzeClick, onArchive, showArch
 
   return (
     <div className="card" style={{ overflow: 'hidden' }}>
-      <div style={{ overflowX: 'auto' }}>
+      <div className="table-scroll">
         <table className="events-table">
           <thead>
             <tr style={{ background: 'var(--bg-2)' }}>

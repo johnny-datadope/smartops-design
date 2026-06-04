@@ -167,54 +167,89 @@
   .type-3xl-bold { font-size: var(--type-3xl); font-weight: var(--weight-bold); letter-spacing: var(--tracking-tight); }
   .text-muted { color: var(--muted-foreground); }
 
-  /* Scrollbars — Chia ScrollArea: w-2.5 track transparent, rounded-full bg-border thumb */
-  html {
+  /* ── Scrollbars (individual tiers — do not mix) ───────────────────────
+     Events page vertical + table horizontal: native browser (Apolo has no CSS).
+     Modal panels: Chia ScrollArea — w-2.5 / 10px, bg-border thumb (unchanged).
+     JSON + reasoning pre: thin 6px variant. */
+
+  /* Events table — Apolo ui/table overflow-x-auto only */
+  .table-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Modal — Chia ScrollArea: w-2.5 track transparent, rounded-full bg-border thumb */
+  .alert-left-scroll,
+  .chat-panel__scroll,
+  .comment-composer__scroll-viewport {
     scrollbar-width: thin;
     scrollbar-color: var(--border) transparent;
   }
-  * {
-    scrollbar-width: thin;
-    scrollbar-color: var(--border) transparent;
-  }
-  *::-webkit-scrollbar {
+  .alert-left-scroll::-webkit-scrollbar,
+  .chat-panel__scroll::-webkit-scrollbar,
+  .comment-composer__scroll-viewport::-webkit-scrollbar {
     width: 10px;
     height: 10px;
   }
-  *::-webkit-scrollbar-track {
+  .alert-left-scroll::-webkit-scrollbar-track,
+  .chat-panel__scroll::-webkit-scrollbar-track,
+  .comment-composer__scroll-viewport::-webkit-scrollbar-track {
     background: transparent;
   }
-  *::-webkit-scrollbar-thumb {
+  .alert-left-scroll::-webkit-scrollbar-thumb,
+  .chat-panel__scroll::-webkit-scrollbar-thumb,
+  .comment-composer__scroll-viewport::-webkit-scrollbar-thumb {
     background-color: var(--border);
     border-radius: 9999px;
     border: 2px solid transparent;
     background-clip: padding-box;
   }
-  *::-webkit-scrollbar-thumb:hover {
+  .alert-left-scroll::-webkit-scrollbar-thumb:hover,
+  .chat-panel__scroll::-webkit-scrollbar-thumb:hover,
+  .comment-composer__scroll-viewport::-webkit-scrollbar-thumb:hover {
     background-color: color-mix(in oklch, var(--border) 80%, var(--muted-foreground));
   }
-  *::-webkit-scrollbar-corner {
+  .alert-left-scroll::-webkit-scrollbar-corner,
+  .chat-panel__scroll::-webkit-scrollbar-corner,
+  .comment-composer__scroll-viewport::-webkit-scrollbar-corner {
     background: transparent;
   }
-  /* Thin variant — Chia reasoning code blocks (w-1.5, bg-border/70) */
+  /* Apolo Radix ScrollArea: no native up/down arrow buttons */
+  .alert-left-scroll::-webkit-scrollbar-button,
+  .chat-panel__scroll::-webkit-scrollbar-button,
+  .comment-composer__scroll-viewport::-webkit-scrollbar-button {
+    display: none;
+    width: 0;
+    height: 0;
+  }
+
+  /* Thin variant — Chia reasoning code blocks + JSON payload (w-1.5, bg-border/70) */
   .scrollbar-thin,
-  pre,
-  .json-payload-card__body {
+  .json-payload-card__body,
+  .reasoning-tool__output {
     scrollbar-width: thin;
     scrollbar-color: color-mix(in oklch, var(--border) 70%, transparent) transparent;
   }
   .scrollbar-thin::-webkit-scrollbar,
-  pre::-webkit-scrollbar,
-  .json-payload-card__body::-webkit-scrollbar {
+  .json-payload-card__body::-webkit-scrollbar,
+  .reasoning-tool__output::-webkit-scrollbar {
     width: 6px;
     height: 6px;
   }
   .scrollbar-thin::-webkit-scrollbar-thumb,
-  pre::-webkit-scrollbar-thumb,
-  .json-payload-card__body::-webkit-scrollbar-thumb {
+  .json-payload-card__body::-webkit-scrollbar-thumb,
+  .reasoning-tool__output::-webkit-scrollbar-thumb {
     background-color: color-mix(in oklch, var(--border) 70%, transparent);
     border-radius: 9999px;
     border: 0;
     background-clip: padding-box;
+  }
+  .scrollbar-thin::-webkit-scrollbar-button,
+  .json-payload-card__body::-webkit-scrollbar-button,
+  .reasoning-tool__output::-webkit-scrollbar-button {
+    display: none;
+    width: 0;
+    height: 0;
   }
   button { font-family: inherit; color: inherit; background: none; border: 0; cursor: pointer; font-size: inherit; }
   button:disabled { cursor: not-allowed; opacity: 0.5; }
