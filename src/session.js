@@ -170,8 +170,29 @@ function mockCloseCase(event) {
   return event;
 }
 
+function ensureSessionUserAssigned(event, sessionUser) {
+  if (!event || !sessionUser) return event;
+  if (isCurrentUserAssigned(event, sessionUser)) return event;
+  const entry = {
+    user_id: sessionUser.id,
+    initials: sessionUser.initials,
+    full_name: sessionUser.full_name,
+  };
+  event.assignments = [...(event.assignments || []), entry];
+  event.assignees = [...(event.assignees || []), {
+    initials: entry.initials,
+    name: entry.full_name,
+  }];
+  if (!event.assignee) {
+    event.assignee = entry.initials;
+    event.assigneeName = entry.full_name;
+  }
+  return event;
+}
+
 function mockCreateCase(event, sessionUser) {
   if (!event) return event;
+  ensureSessionUserAssigned(event, sessionUser);
   const caseId = nextMockCaseId();
   event.case_id = caseId;
   event.case = `#${caseId}`;
@@ -183,24 +204,13 @@ function mockCreateCase(event, sessionUser) {
   event.investigation_stages = initInvestigationStages();
   delete event.mock_turns;
 
-  if (sessionUser && !isCurrentUserAssigned(event, sessionUser)) {
-    const entry = {
-      user_id: sessionUser.id,
-      initials: sessionUser.initials,
-      full_name: sessionUser.full_name,
-    };
-    event.assignments = [...(event.assignments || []), entry];
-    event.assignees = [...(event.assignees || []), { initials: entry.initials, name: entry.full_name }];
-    event.assignee = event.assignees[0]?.initials || null;
-    event.assigneeName = event.assignees[0]?.name || null;
-  }
-
   return event;
 }
 
 Object.assign(window, {
   getSessionUser,
   isCurrentUserAssigned,
+  ensureSessionUserAssigned,
   nextMockCaseId,
   mockCreateCase,
   mockCloseCase,

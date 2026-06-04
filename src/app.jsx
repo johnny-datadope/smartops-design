@@ -138,20 +138,9 @@ function App() {
 
   const sessionUser = user ? getSessionUser(user) : null;
 
-  const showNotAssignedToast = () => {
-    setToast({
-      title: t.alertDetail.notAssigned,
-      description: t.alertDetail.notAssignedDescription,
-    });
-  };
-
   const handleAnalyzeClick = (index) => {
     const ev = EVENTS[index];
     if (!ev || !sessionUser) return;
-    if (!isCurrentUserAssigned(ev, sessionUser)) {
-      showNotAssignedToast();
-      return;
-    }
     if (ev.case_id == null) {
       setConfirmCreateCaseIndex(index);
       return;
@@ -164,11 +153,6 @@ function App() {
     if (index == null) return;
     const ev = EVENTS[index];
     if (!ev || !sessionUser) return;
-    if (!isCurrentUserAssigned(ev, sessionUser)) {
-      setConfirmCreateCaseIndex(null);
-      showNotAssignedToast();
-      return;
-    }
     setCreatingCaseIndex(index);
     mockCreateCase(ev, sessionUser);
     setCreatingCaseIndex(null);
@@ -182,10 +166,6 @@ function App() {
     if (detailId == null) return;
     const ev = EVENTS[detailId];
     if (!ev || !sessionUser) return;
-    if (!isCurrentUserAssigned(ev, sessionUser)) {
-      showNotAssignedToast();
-      return;
-    }
     setConfirmCreateCaseIndex(detailId);
   };
 

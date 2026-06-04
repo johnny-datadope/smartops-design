@@ -229,11 +229,6 @@ function EventDetail({ event, onClose, onCreateCase, onAssign, onEventUpdate, cu
   const streamStartedRef = React.useRef(null);
   const [stageRev, setStageRev] = React.useState(0);
 
-  const resolvedSessionUser = sessionUser || (currentUser ? getSessionUser(currentUser) : null);
-  const isUserAssigned = event && resolvedSessionUser
-    ? isCurrentUserAssigned(event, resolvedSessionUser)
-    : false;
-
   const [turns, setTurns] = React.useState([]);
   const [busy, setBusy] = React.useState(false);
   const scrollRef = React.useRef(null);
@@ -548,7 +543,6 @@ function EventDetail({ event, onClose, onCreateCase, onAssign, onEventUpdate, cu
         <div className="chat-panel__scroll chat-panel__scroll--center">
           <EmptyCaseState
             t={t}
-            isUserAssigned={isUserAssigned}
             isCreating={isCreatingCase}
             onCreateCase={onCreateCase}
           />
@@ -1018,41 +1012,35 @@ function ChatPanelHeader({
   );
 }
 
-function EmptyCaseState({ t, isUserAssigned, isCreating, onCreateCase }) {
+function EmptyCaseState({ t, isCreating, onCreateCase }) {
   const iconWrapStyle = {
     width: 64, height: 64, borderRadius: 9999, marginBottom: 16,
     display: 'flex', alignItems: 'center', justifyContent: 'center',
-    background: isUserAssigned
-      ? 'color-mix(in oklch, var(--primary) 10%, transparent)'
-      : 'var(--muted)',
-    border: isUserAssigned
-      ? '2px solid color-mix(in oklch, var(--primary) 20%, transparent)'
-      : '2px solid color-mix(in oklch, var(--muted-foreground) 20%, transparent)',
-    color: isUserAssigned ? 'var(--primary)' : 'var(--muted-foreground)',
+    background: 'color-mix(in oklch, var(--primary) 10%, transparent)',
+    border: '2px solid color-mix(in oklch, var(--primary) 20%, transparent)',
+    color: 'var(--primary)',
   };
 
   return (
     <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'32px 24px', textAlign:'center', minHeight:300 }}>
       <div style={iconWrapStyle}>
-        {isUserAssigned ? <IconBrainCircuit size={32}/> : <IconUserX size={32}/>}
+        <IconBrainCircuit size={32}/>
       </div>
       <div style={{ fontSize:18, fontWeight:600, marginBottom:6 }}>
-        {isUserAssigned ? t.cases.noCaseOpened : t.alertDetail.notAssigned}
+        {t.cases.noCaseOpened}
       </div>
       <p style={{ fontSize:14, color:'var(--muted-foreground)', maxWidth:280, lineHeight:1.5, margin:'0 0 20px' }}>
-        {isUserAssigned ? t.alerts.createCaseDescription : t.alertDetail.notAssignedDescription}
+        {t.alerts.createCaseDescription}
       </p>
-      {isUserAssigned && (
-        <button
-          type="button"
-          className="btn btn--primary btn--sm"
-          disabled={isCreating}
-          onClick={() => onCreateCase && onCreateCase()}
-        >
-          <IconBrainCircuit size={14}/>
-          {isCreating ? t.common.loading : t.investigate.startInvestigation}
-        </button>
-      )}
+      <button
+        type="button"
+        className="btn btn--primary btn--sm"
+        disabled={isCreating}
+        onClick={() => onCreateCase && onCreateCase()}
+      >
+        <IconBrainCircuit size={14}/>
+        {isCreating ? t.common.loading : t.investigate.startInvestigation}
+      </button>
     </div>
   );
 }

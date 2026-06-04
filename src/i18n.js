@@ -67,7 +67,7 @@ const TRANSLATIONS = {
       investigate: 'Investigate',
       viewRCA: 'View RCA',
       createCaseTitle: 'Create case',
-      createCaseDescription: 'A new case will be created to start the investigation for this event.',
+      createCaseDescription: 'A new case will be created to start the investigation for this event, and you will be automatically assigned.',
       createCaseConfirm: 'Continue',
     },
     filters: {
@@ -490,7 +490,7 @@ const TRANSLATIONS = {
       investigate: 'Investigar',
       viewRCA: 'Ver RCA',
       createCaseTitle: 'Crear caso',
-      createCaseDescription: 'Se creará un nuevo caso para iniciar la investigación de este evento.',
+      createCaseDescription: 'Se creará un nuevo caso para iniciar la investigación de este evento y se te asignará automáticamente.',
       createCaseConfirm: 'Continuar',
     },
     filters: {
