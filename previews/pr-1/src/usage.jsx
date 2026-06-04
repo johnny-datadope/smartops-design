@@ -324,13 +324,11 @@ function UsageMetricsPage() {
 
   return (
     <div className="layout-page layout-page--usage" data-screen-label="05 Usage & Costs">
-      <p className="admin-mobile-label" style={{ fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--muted-foreground)', margin: 0 }}>
-        {t.admin.sidebar.title}
-      </p>
+      <p className="admin-mobile-label admin-sidebar-label">{t.admin.sidebar.title}</p>
       <div className="usage-header">
         <div>
-          <h1 className="users-title" style={{ fontWeight:700, letterSpacing:'-0.02em', margin:0 }}>{t.admin.usage.title}</h1>
-          <div className="users-subtitle" style={{ color:'var(--muted-foreground)', marginTop:4 }}>{t.admin.usage.subtitle}</div>
+          <h1 className="users-title">{t.admin.usage.title}</h1>
+          <div className="users-subtitle">{t.admin.usage.subtitle}</div>
         </div>
         <UsageRangePicker
           range={range}
@@ -505,9 +503,9 @@ function UsageSummary({ label, value, sub, iconBg, iconColor, icon }) {
     <div className="card" style={{ padding: '1.25rem' }}>
       <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:16 }}>
         <div style={{ minWidth:0, display:'flex', flexDirection:'column', gap:4 }}>
-          <span style={{ fontSize:'0.875rem', color:'var(--muted-foreground)' }}>{label}</span>
-          <span style={{ fontSize:'1.875rem', fontWeight:700, lineHeight:1.1, letterSpacing:'-0.02em' }}>{value}</span>
-          <span style={{ fontSize:'0.75rem', color:'var(--muted-foreground)', marginTop:4 }}>{sub}</span>
+          <span className="usage-kpi-card__label">{label}</span>
+          <span className="usage-kpi-card__value">{value}</span>
+          <span className="usage-kpi-card__sub">{sub}</span>
         </div>
         <span style={{
           width:'2.25rem', height:'2.25rem', borderRadius:'0.375rem', flexShrink:0,
@@ -973,24 +971,24 @@ function UsageDrilldown({ day, rangeData, rangeTotals, scopePeriodLabel, bucket 
       </div>
       {cases.length === 0 ? (
         <div style={{ padding: '32px 20px', textAlign: 'center' }}>
-          <div style={{ fontSize: 12.5, fontWeight: 600 }}>{t.admin.usage.topCases.emptyTitle}</div>
-          <div style={{ fontSize: 11, color: 'var(--fg-3)', marginTop: 6 }}>{t.admin.usage.topCases.emptyDescription}</div>
+          <div className="usage-drill-empty-title">{t.admin.usage.topCases.emptyTitle}</div>
+          <div className="usage-drill-empty-desc">{t.admin.usage.topCases.emptyDescription}</div>
         </div>
       ) : (
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8125rem' }}>
+        <table className="usage-drill-table">
           <thead>
             <tr style={{ background: 'color-mix(in oklch, var(--muted) 40%, transparent)' }}>
-              <th style={usageDrillTh}>{cols.case}</th>
-              <th style={usageDrillTh}>{cols.title}</th>
-              <th style={usageDrillTh}>{cols.status}</th>
-              <th style={{ ...usageDrillTh, textAlign: 'right' }}>{cols.tokens}</th>
-              <th style={{ ...usageDrillTh, textAlign: 'right' }}>{cols.cost}</th>
+              <th className="usage-drill-th">{cols.case}</th>
+              <th className="usage-drill-th">{cols.title}</th>
+              <th className="usage-drill-th">{cols.status}</th>
+              <th className="usage-drill-th usage-drill-th--right">{cols.tokens}</th>
+              <th className="usage-drill-th usage-drill-th--right">{cols.cost}</th>
             </tr>
           </thead>
           <tbody>
             {cases.map((c, i) => (
               <tr key={i} style={{ borderTop: '1px solid var(--line)' }}>
-                <td className="mono" style={{ ...usageDrillTd, paddingLeft: 20, fontSize: '0.75rem', fontWeight: 600 }}>#{c.case_id || c.caseId}</td>
+                <td className="mono usage-drill-case-id">#{c.case_id || c.caseId}</td>
                 <td className="usage-top-cases-event-cell" style={usageDrillTd}>
                   <UsageTopCasesEventCell c={c}/>
                 </td>
@@ -998,7 +996,7 @@ function UsageDrilldown({ day, rangeData, rangeTotals, scopePeriodLabel, bucket 
                   <CaseStatusBadge caseStatus={c.case_status} status={c.caseStatus}/>
                 </td>
                 <td className="mono" style={{ ...usageDrillTd, textAlign: 'right', color: 'var(--fg-2)' }}>{formatInteger(c.tokens, locale)}</td>
-                <td className="mono" style={{ ...usageDrillTd, fontWeight: 600, textAlign: 'right' }}>{formatUsageCurrency(c.cost)}</td>
+                <td className="mono usage-drill-cost" style={{ ...usageDrillTd, textAlign: 'right' }}>{formatUsageCurrency(c.cost)}</td>
               </tr>
             ))}
           </tbody>
@@ -1008,10 +1006,6 @@ function UsageDrilldown({ day, rangeData, rangeTotals, scopePeriodLabel, bucket 
   );
 }
 
-const usageDrillTh = {
-  textAlign:'left', fontWeight:500, fontSize:'0.75rem', color:'var(--muted-foreground)',
-  padding:'12px 16px', whiteSpace:'nowrap',
-};
 const usageDrillTd = { padding:'12px 16px', verticalAlign:'middle' };
 
 Object.assign(window, { UsageMetricsPage });

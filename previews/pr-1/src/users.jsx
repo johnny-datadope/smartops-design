@@ -73,10 +73,7 @@ function UserProviderBadge({ provider, small }) {
   const { t } = useI18n();
   const isGoogle = provider === 'google';
   return (
-    <span style={{
-      display: 'inline-flex', alignItems: 'center', gap: 4,
-      paddingLeft: 6, paddingRight: 8, paddingTop: small ? 0 : 2, paddingBottom: small ? 0 : 2,
-      borderRadius: 9999, fontSize: small ? 10 : '0.75rem', fontWeight: 500, lineHeight: 1.25,
+    <span className={'users-provider-badge' + (small ? ' users-provider-badge--small' : '')} style={{
       border: `1px solid ${isGoogle ? 'var(--border)' : 'color-mix(in oklch, var(--primary) 40%, transparent)'}`,
       background: isGoogle ? 'var(--background)' : 'color-mix(in oklch, var(--primary) 10%, transparent)',
       color: isGoogle ? 'var(--foreground)' : 'var(--primary)',
@@ -96,8 +93,8 @@ function UsersStatCard({ label, value, icon, iconBg, iconColor }) {
   return (
     <div className="card" style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 16, padding: '1rem 1.25rem' }}>
       <div style={{ minWidth: 0 }}>
-        <div className="users-stat-value" style={{ fontWeight: 600, lineHeight: 1 }}>{value}</div>
-        <div style={{ marginTop: 8, fontSize: '0.625rem', textTransform: 'uppercase', letterSpacing: '0.025em', color: 'var(--muted-foreground)' }}>{label}</div>
+        <div className="users-stat-value">{value}</div>
+        <div className="users-stat-label">{label}</div>
       </div>
       <div className="users-stat-icon" style={{ background: iconBg, color: iconColor }}>{icon}</div>
     </div>
@@ -135,11 +132,11 @@ function UsersTableRow({ user, canDelete, onEdit, onRemove }) {
           <div className="users-avatar">{getInitials(user)}</div>
           <div style={{ minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              <span style={{ fontWeight: 500, fontSize: '0.875rem' }}>{displayName}</span>
+              <span className="users-table__name">{displayName}</span>
               <UserProviderBadge provider={user.auth_provider} small/>
             </div>
-            <span className="users-table-mobile-meta" style={{ display: 'none', fontSize: 11, color: 'var(--muted-foreground)' }}>{user.username}</span>
-            <span className="users-table-mobile-email" style={{ display: 'none', fontSize: 11, color: 'var(--muted-foreground)' }}>{user.email}</span>
+            <span className="users-table-mobile-meta">{user.username}</span>
+            <span className="users-table-mobile-email">{user.email}</span>
             <div className="users-table-mobile-badges" style={{ display: 'none', marginTop: 4, gap: 6, flexWrap: 'wrap' }}>
               <UserRoleBadge role={user.role}/>
               <UserStatusBadge active={user.is_active}/>
@@ -147,8 +144,8 @@ function UsersTableRow({ user, canDelete, onEdit, onRemove }) {
           </div>
         </div>
       </td>
-      <td className="users-col-username" style={{ padding: '12px 16px', fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--muted-foreground)' }}>{user.username}</td>
-      <td className="users-col-email" style={{ padding: '12px 16px', fontSize: '0.875rem', color: 'var(--muted-foreground)' }}>{user.email}</td>
+      <td className="users-col-username">{user.username}</td>
+      <td className="users-col-email">{user.email}</td>
       <td className="users-col-password" style={{ padding: '12px 16px', fontFamily: 'var(--font-mono)', letterSpacing: '0.15em', color: 'var(--muted-foreground)' }} aria-label="masked password">••••••••</td>
       <td className="users-col-role" style={{ padding: '12px 16px' }}><UserRoleBadge role={user.role}/></td>
       <td className="users-col-status" style={{ padding: '12px 16px' }}><UserStatusBadge active={user.is_active}/></td>
@@ -170,23 +167,23 @@ function UsersTable({ users, isLoading, currentUserId, onEdit, onRemove }) {
 
   return (
     <div className="card" style={{ overflow: 'hidden' }}>
-      <table className="users-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8125rem' }}>
+      <table className="users-table">
         <thead>
           <tr style={{ background: 'color-mix(in oklch, var(--muted) 40%, transparent)' }}>
-            <th style={usersThStyle}>{t.admin.table.user}</th>
-            <th className="users-col-username" style={usersThStyle}>{t.admin.table.username}</th>
-            <th className="users-col-email" style={usersThStyle}>{t.admin.table.email}</th>
-            <th className="users-col-password" style={usersThStyle}>{t.admin.table.password}</th>
-            <th className="users-col-role" style={usersThStyle}>{t.admin.table.role}</th>
-            <th className="users-col-status" style={usersThStyle}>{t.admin.table.status}</th>
-            <th style={{ ...usersThStyle, textAlign: 'right' }}>{t.admin.table.actions}</th>
+            <th>{t.admin.table.user}</th>
+            <th className="users-col-username">{t.admin.table.username}</th>
+            <th className="users-col-email">{t.admin.table.email}</th>
+            <th className="users-col-password">{t.admin.table.password}</th>
+            <th className="users-col-role">{t.admin.table.role}</th>
+            <th className="users-col-status">{t.admin.table.status}</th>
+            <th style={{ textAlign: 'right' }}>{t.admin.table.actions}</th>
           </tr>
         </thead>
         <tbody>
           {isLoading && users.length === 0 ? (
-            <tr><td colSpan={colSpan} style={{ padding: '2.5rem', textAlign: 'center', color: 'var(--muted-foreground)' }}>{t.admin.table.loading}</td></tr>
+            <tr><td colSpan={colSpan} className="users-table-status-empty">{t.admin.table.loading}</td></tr>
           ) : users.length === 0 ? (
-            <tr><td colSpan={colSpan} style={{ padding: '2.5rem', textAlign: 'center', color: 'var(--muted-foreground)' }}>{t.admin.table.empty}</td></tr>
+            <tr><td colSpan={colSpan} className="users-table-status-empty">{t.admin.table.empty}</td></tr>
           ) : users.map(u => (
             <UsersTableRow key={u.id} user={u}
               canDelete={currentUserId === undefined || u.id !== currentUserId}
@@ -197,11 +194,6 @@ function UsersTable({ users, isLoading, currentUserId, onEdit, onRemove }) {
     </div>
   );
 }
-
-const usersThStyle = {
-  textAlign: 'left', fontWeight: 500, fontSize: '0.75rem',
-  padding: '12px 16px', color: 'var(--muted-foreground)', whiteSpace: 'nowrap',
-};
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const USERNAME_RE = /^[a-zA-Z0-9._-]+$/;
@@ -290,26 +282,21 @@ function UserFormDialog({ mode, user, open, onClose, onSubmit, isSubmitting }) {
     <Modal onClose={() => { if (!isSubmitting) onClose(); }} title={title} sub={description} width={520}>
       <form onSubmit={handleSubmit} noValidate>
         {sso && (
-          <div style={{
-            display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: 14,
-            padding: 12, borderRadius: 8, border: '1px solid var(--border)',
-            background: 'color-mix(in oklch, var(--muted) 40%, transparent)',
-            fontSize: '0.8125rem', color: 'var(--muted-foreground)',
-          }}>
+          <div className="users-form-sso-notice">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ flexShrink: 0, marginTop: 2 }} aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
             <span>{t.admin.form.ssoNotice}</span>
           </div>
         )}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
           <FormField label={t.admin.form.username} required={!sso} error={attempted && errors.username}>
-            <input value={form.username} disabled={sso} onChange={e => setForm(s => ({ ...s, username: e.target.value }))} style={inputStyle(attempted && errors.username)}/>
+            <input value={form.username} disabled={sso} onChange={e => setForm(s => ({ ...s, username: e.target.value }))} className={usersInputClass(attempted && errors.username)}/>
           </FormField>
           <FormField label={t.admin.form.fullName} required={!sso} error={attempted && errors.full_name}>
-            <input value={form.full_name} disabled={sso} onChange={e => setForm(s => ({ ...s, full_name: e.target.value }))} style={inputStyle(attempted && errors.full_name)}/>
+            <input value={form.full_name} disabled={sso} onChange={e => setForm(s => ({ ...s, full_name: e.target.value }))} className={usersInputClass(attempted && errors.full_name)}/>
           </FormField>
           <div style={{ gridColumn: '1 / -1' }}>
             <FormField label={t.admin.form.email} required={!sso} error={attempted && errors.email}>
-              <input type="email" value={form.email} disabled={sso} onChange={e => setForm(s => ({ ...s, email: e.target.value }))} style={inputStyle(attempted && errors.email)}/>
+              <input type="email" value={form.email} disabled={sso} onChange={e => setForm(s => ({ ...s, email: e.target.value }))} className={usersInputClass(attempted && errors.email)}/>
             </FormField>
           </div>
           <FormField label={t.admin.form.role} required>
@@ -328,8 +315,8 @@ function UserFormDialog({ mode, user, open, onClose, onSubmit, isSubmitting }) {
               background: 'color-mix(in oklch, var(--muted) 30%, transparent)',
             }}>
               <div>
-                <div style={{ fontSize: '0.8125rem', fontWeight: 500 }}>{t.admin.form.active}</div>
-                <div style={{ fontSize: '0.6875rem', color: 'var(--muted-foreground)', marginTop: 2 }}>
+                <div className="users-form-row-label">{t.admin.form.active}</div>
+                <div className="users-form-row-hint">
                   {form.is_active ? t.admin.status.active : t.admin.status.disabled}
                 </div>
               </div>
@@ -342,14 +329,15 @@ function UserFormDialog({ mode, user, open, onClose, onSubmit, isSubmitting }) {
             <div style={{ gridColumn: '1 / -1' }}>
               <FormField label={
                 <span>{t.admin.form.password}{mode === 'create' ? <span style={{ color: 'var(--destructive)' }}> *</span> : (
-                  <span style={{ marginLeft: 4, fontSize: '0.6875rem', fontWeight: 400, color: 'var(--muted-foreground)' }}>({t.admin.form.passwordOptional})</span>
+                  <span className="users-form-optional">({t.admin.form.passwordOptional})</span>
                 )}</span>
               } error={attempted && errors.password}>
                 <div style={{ position: 'relative' }}>
                   <input type={showPassword ? 'text' : 'password'} value={form.password}
                     placeholder={mode === 'edit' ? t.admin.form.passwordPlaceholder : undefined}
                     onChange={e => setForm(s => ({ ...s, password: e.target.value }))}
-                    style={{ ...inputStyle(attempted && errors.password), paddingRight: 40 }}/>
+                    className={usersInputClass(attempted && errors.password)}
+                    style={{ paddingRight: 40 }}/>
                   <button type="button" onClick={() => setShowPassword(v => !v)} tabIndex={-1}
                     style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--muted-foreground)', cursor: 'pointer', padding: 4 }}
                     aria-label={showPassword ? t.admin.form.hidePassword : t.admin.form.showPassword}>
@@ -377,8 +365,8 @@ function ConfirmRemove({ user, onCancel, onConfirm, isDeleting }) {
       sub={t.admin.deleteDialog.description.replace('{name}', name)} width={420}>
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 14 }}>
         <button type="button" onClick={onCancel} disabled={isDeleting} className="btn btn--outline btn--sm">{t.common.cancel}</button>
-        <button type="button" onClick={onConfirm} disabled={isDeleting} className="btn btn--sm"
-          style={{ background: 'color-mix(in oklch, var(--destructive) 18%, transparent)', border: '1px solid color-mix(in oklch, var(--destructive) 40%, transparent)', color: 'var(--destructive)', fontWeight: 600 }}>
+        <button type="button" onClick={onConfirm} disabled={isDeleting} className="btn btn--sm users-btn-remove--emphasis"
+          style={{ background: 'color-mix(in oklch, var(--destructive) 18%, transparent)', border: '1px solid color-mix(in oklch, var(--destructive) 40%, transparent)', color: 'var(--destructive)' }}>
           {t.admin.actions.remove}
         </button>
       </div>
@@ -388,15 +376,7 @@ function ConfirmRemove({ user, onCancel, onConfirm, isDeleting }) {
 
 function UsersToast({ message }) {
   return (
-    <div style={{
-      position: 'fixed', bottom: 20, right: 20, zIndex: 60,
-      padding: '11px 16px', borderRadius: 10,
-      background: 'color-mix(in oklch, var(--sev-ok) 18%, var(--bg-2))',
-      border: '1px solid color-mix(in oklch, var(--sev-ok) 45%, var(--line-2))',
-      color: 'var(--fg)', fontSize: 12.5, fontWeight: 500,
-      display: 'flex', alignItems: 'center', gap: 9,
-      boxShadow: '0 20px 40px -14px rgba(0,0,0,0.5)',
-    }}>
+    <div className="users-toast">
       <IconCheck size={14} style={{ color: 'var(--sev-ok)' }}/>
       {message}
     </div>
@@ -484,13 +464,11 @@ function UsersPage({ currentUser }) {
 
   return (
     <div className="layout-page" data-screen-label="03 Manage Users" style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-      <p className="admin-mobile-label" style={{ fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--muted-foreground)', margin: 0 }}>
-        {t.admin.sidebar.title}
-      </p>
+      <p className="admin-mobile-label admin-sidebar-label">{t.admin.sidebar.title}</p>
       <div className="users-header">
         <div style={{ minWidth: 0 }}>
-          <h1 className="users-title" style={{ fontWeight: 700, margin: 0 }}>{t.admin.title}</h1>
-          <p className="users-subtitle" style={{ marginTop: 4, color: 'var(--muted-foreground)' }}>{t.admin.subtitle}</p>
+          <h1 className="users-title">{t.admin.title}</h1>
+          <p className="users-subtitle">{t.admin.subtitle}</p>
         </div>
         <button type="button" className="btn btn--primary btn--sm users-create-btn" onClick={() => setCreateOpen(true)} style={{ gap: 6 }}>
           <IconPlus size={14}/> {t.admin.actions.createUser}
@@ -515,12 +493,8 @@ function UsersPage({ currentUser }) {
   );
 }
 
-function inputStyle(hasError) {
-  return {
-    width: '100%', padding: '9px 11px', borderRadius: 7,
-    background: 'var(--bg)', border: `1px solid ${hasError ? 'var(--sev-crit)' : 'var(--line-2)'}`,
-    color: 'var(--fg)', fontSize: 12.5, outline: 'none', boxSizing: 'border-box',
-  };
+function usersInputClass(hasError) {
+  return 'users-input' + (hasError ? ' is-error' : '');
 }
 
 function Modal({ title, sub, children, onClose, width = 520 }) {
@@ -539,8 +513,8 @@ function Modal({ title, sub, children, onClose, width = 520 }) {
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
           <div>
-            <div style={{ fontSize: 15, fontWeight: 600 }}>{title}</div>
-            {sub && <div style={{ fontSize: 12, color: 'var(--fg-3)', marginTop: 3 }}>{sub}</div>}
+            <div className="users-modal__title">{title}</div>
+            {sub && <div className="users-modal__sub">{sub}</div>}
           </div>
           <button type="button" onClick={onClose} style={{ width: 26, height: 26, borderRadius: 6, border: '1px solid var(--line)', color: 'var(--fg-2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <IconClose size={13}/>
@@ -555,12 +529,12 @@ function Modal({ title, sub, children, onClose, width = 520 }) {
 function FormField({ label, required, error, children }) {
   return (
     <div style={{ marginBottom: 12 }}>
-      <div style={{ fontSize: 11.5, fontWeight: 500, color: 'var(--fg-2)', marginBottom: 5 }}>
+      <div className="users-field-label">
         {label}{required && <span style={{ color: 'var(--sev-crit)', marginLeft: 3 }}>*</span>}
       </div>
       {children}
       {error && (
-        <div style={{ fontSize: 11, color: 'var(--sev-crit)', marginTop: 5 }}>{error}</div>
+        <div className="users-field-error">{error}</div>
       )}
     </div>
   );
