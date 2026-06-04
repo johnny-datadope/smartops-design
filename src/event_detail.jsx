@@ -4,6 +4,12 @@ const PANEL_RIGHT_PCT_KEY = 'smartops-alert-detail-right-pct';
 const PANEL_RIGHT_DEFAULT = 45;
 const PANEL_RIGHT_MIN = 30;
 const PANEL_RIGHT_MAX = 65;
+/** Must match .panel-resize-handle flex-basis in index.html */
+const PANEL_RESIZE_HANDLE_PX = 1;
+
+function panelSplitWidth(pct) {
+  return `calc((100% - ${PANEL_RESIZE_HANDLE_PX}px) * ${pct / 100})`;
+}
 
 /** Max textarea height (~20 lines at 13px + leading-relaxed). Update if typography changes. */
 const COMMENT_TEXTAREA_MAX_HEIGHT = 420;
@@ -76,11 +82,19 @@ function StageNode({ isCompleted, isActive }) {
   );
 }
 
-function InvestigationStageDetails({ stageData, isCompleted, isActive, nowIso, t }) {
+function InvestigationStageDetails({ stageData, isCompleted, isActive, nowIso, t, layout = 'wide' }) {
   if (!stageData?.started_at) {
     return <span className="investigation-stages__dash">—</span>;
   }
-  const tone = isCompleted ? 'is-done' : isActive ? 'is-active' : '';
+  if (layout === 'compact') {
+    return (
+      <p className="investigation-stages__times">
+        {formatTimestamp(stageData.started_at)}
+        {stageData.finished_at && ` → ${formatTimestamp(stageData.finished_at)}`}
+      </p>
+    );
+  }
+  const tone = isCompleted ? '' : isActive ? 'is-active' : '';
   const duration = formatDuration(stageData.started_at, stageData.finished_at || nowIso);
   return (
     <>
@@ -88,7 +102,7 @@ function InvestigationStageDetails({ stageData, isCompleted, isActive, nowIso, t
         {t.alertDetail.stageStart} {formatTimestamp(stageData.started_at)}
       </span>
       {stageData.finished_at && (
-        <span className={'investigation-stages__end ' + tone}>
+        <span className="investigation-stages__end">
           {t.alertDetail.stageEnd} {formatTimestamp(stageData.finished_at)}
         </span>
       )}
@@ -131,7 +145,14 @@ function InvestigationStagesTimeline({ stages, t }) {
                 </span>
               )}
             </div>
-            <InvestigationStageDetails stageData={stageData} isCompleted={isCompleted} isActive={isActive} nowIso={nowIso} t={t}/>
+            <InvestigationStageDetails
+              stageData={stageData}
+              isCompleted={isCompleted}
+              isActive={isActive}
+              nowIso={nowIso}
+              t={t}
+              layout="compact"
+            />
           </div>
         </div>
       );
@@ -166,7 +187,7 @@ function InvestigationStagesTimeline({ stages, t }) {
 }
 
 function AlertModalHeader({
-  event, severityKey, onClose, isMaximized, onToggleMaximize, showActions,
+  event, severityKey, onClose, isMaximized, onToggleMaximize,
 }) {
   const { t } = useI18n();
   const namespace = event.namespace || event.scope || 'default';
@@ -186,8 +207,8 @@ function AlertModalHeader({
           <span>{formatTimestamp(event.at)}</span>
         </p>
       </div>
-      {showActions && (
-        <div className="modal-alert-header__actions">
+      <div className="modal-alert-header__actions">
+        {onToggleMaximize && (
           <button
             type="button"
             className="modal-alert-header__action-btn"
@@ -196,16 +217,16 @@ function AlertModalHeader({
           >
             {isMaximized ? <IconMinimize2 size={16}/> : <IconExternalLink size={16}/>}
           </button>
-          <button
-            type="button"
-            className="modal-alert-header__action-btn"
-            onClick={onClose}
-            aria-label={t.common.close}
-          >
-            <IconClose size={16}/>
-          </button>
-        </div>
-      )}
+        )}
+        <button
+          type="button"
+          className="modal-alert-header__action-btn"
+          onClick={onClose}
+          aria-label={t.common.close}
+        >
+          <IconClose size={16}/>
+        </button>
+      </div>
     </div>
   );
 }
@@ -347,13 +368,13 @@ function EventDetail({ event, onClose, onCreateCase, onAssign, onEventUpdate, cu
 
   const alertSupportUrl = useAlertHelpdeskUrl(event, alertId, currentUser, turns);
 
-  // Autoscroll the reasoning pane whenever turns change.
   React.useEffect(() => {
     const el = scrollRef.current;
     if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
   }, [turns]);
 
   const rcaHasBeenGenerated = turns.some(t => t.kind === 'analysis');
+  const postMortemGenerated = turns.some(t => t.kind === 'postmortem');
   const canReinvestigate = turns.some(t => t.kind === 'user');
 
   const handleFeedback = (type) => {
@@ -375,32 +396,42 @@ function EventDetail({ event, onClose, onCreateCase, onAssign, onEventUpdate, cu
   };
 
   const runPostmortem = () => {
-    if (busy) return;
+    if (busy || postMortemGenerated) return;
     setBusy(true);
+    if (typeof startPostMortemStage === 'function') {
+      event.investigation_stages = startPostMortemStage(
+        event.investigation_stages
+          || (typeof resolveInvestigationStages === 'function' ? resolveInvestigationStages(event) : null),
+      );
+      setStageRev((n) => n + 1);
+      onEventUpdate?.();
+    }
     const rid = 'r' + Date.now();
-    setTurns(ts => [...ts, { id: rid, kind: 'reasoning', isStreaming: true, steps: [] }]);
-    const stream = [
-      { label: 'Drafting post-mortem…', isCompleted: true, toolCalls: [] },
-      { label: 'Gathering timeline from alerts, deploys and comments…', isCompleted: true, toolCalls: [] },
-      { label: 'Summarising impact and writing action items…', isCompleted: true, toolCalls: [] },
-    ];
-    let i = 0;
-    const pushStep = () => {
-      if (i >= stream.length) {
-        setTurns(ts => [
-          ...ts.map(t => t.id === rid ? { ...t, isStreaming: false } : t),
-          { id: 'p' + Date.now(), kind: 'postmortem' },
-        ]);
-        setBusy(false);
-        return;
+    const stepLabel = t.irisAgentStep?.postMortem || t.chat.postMortem;
+    const reasoningStep = { label: stepLabel, isCompleted: false, toolCalls: [] };
+    setTurns(ts => [...ts, { id: rid, kind: 'reasoning', isStreaming: true, steps: [reasoningStep] }]);
+
+    const finish = () => {
+      const markdown = typeof buildMockPostMortemMarkdown === 'function'
+        ? buildMockPostMortemMarkdown(event, t)
+        : '';
+      setTurns(ts => [
+        ...ts.map(turn => turn.id === rid
+          ? { ...turn, isStreaming: false, steps: [{ label: stepLabel, isCompleted: true, toolCalls: [] }] }
+          : turn),
+        { id: 'p' + Date.now(), kind: 'postmortem', markdown },
+      ]);
+      if (typeof mockAutoCloseCaseAfterPostMortem === 'function') {
+        mockAutoCloseCaseAfterPostMortem(event);
+      } else if (typeof completePostMortemStage === 'function') {
+        event.investigation_stages = completePostMortemStage(event.investigation_stages);
       }
-      const step = stream[i++];
-      setTurns(ts => ts.map(t => t.id === rid
-        ? { ...t, steps: [...t.steps, step] }
-        : t));
-      setTimeout(pushStep, 600);
+      setStageRev((n) => n + 1);
+      onEventUpdate?.();
+      setBusy(false);
     };
-    setTimeout(pushStep, 300);
+
+    setTimeout(finish, 2200);
   };
 
   const sendMessage = () => {
@@ -449,7 +480,11 @@ function EventDetail({ event, onClose, onCreateCase, onAssign, onEventUpdate, cu
       const el = containerRef.current;
       if (!el) return;
       const rect = el.getBoundingClientRect();
-      const pct = ((rect.right - ev.clientX) / rect.width) * 100;
+      const available = rect.width - PANEL_RESIZE_HANDLE_PX;
+      if (available <= 0) return;
+      const splitX = Math.max(rect.left, Math.min(ev.clientX, rect.right - PANEL_RESIZE_HANDLE_PX));
+      const rightPx = rect.right - splitX - PANEL_RESIZE_HANDLE_PX;
+      const pct = (rightPx / available) * 100;
       setRightPct(Math.min(PANEL_RIGHT_MAX, Math.max(PANEL_RIGHT_MIN, pct)));
     };
     const onUp = () => {
@@ -467,7 +502,7 @@ function EventDetail({ event, onClose, onCreateCase, onAssign, onEventUpdate, cu
   };
 
   const leftPanel = (
-    <div className="modal-split__panel">
+    <div className="modal-split__panel alert-left-panel">
       <div className="modal-left-fixed">
         <AlertModalHeader
           event={event}
@@ -475,7 +510,6 @@ function EventDetail({ event, onClose, onCreateCase, onAssign, onEventUpdate, cu
           onClose={onClose}
           isMaximized={isMaximized}
           onToggleMaximize={() => setIsMaximized(m => !m)}
-          showActions={!isMobile}
         />
 
         {investigationStages && (
@@ -497,7 +531,7 @@ function EventDetail({ event, onClose, onCreateCase, onAssign, onEventUpdate, cu
         </div>
       </div>
 
-      <div style={{ flex:1, overflowY:'auto', padding:'1.125rem 1.25rem', minHeight:0 }}>
+      <div className="alert-left-scroll">
         {tab === 'overview' && (
           <OverviewPane event={event} t={t}/>
         )}
@@ -567,12 +601,25 @@ function EventDetail({ event, onClose, onCreateCase, onAssign, onEventUpdate, cu
                 if (turn.kind === 'analysis' && idx > 0 && turns[idx - 1].kind === 'reasoning') {
                   return null;
                 }
+                if (turn.kind === 'postmortem' && idx > 0 && turns[idx - 1].kind === 'reasoning') {
+                  return null;
+                }
                 if (turn.kind === 'reasoning' && turns[idx + 1]?.kind === 'analysis') {
                   return (
                     <ThreadTurnCombined
                       key={turn.id}
                       reasoning={turn}
                       analysis={turns[idx + 1]}
+                      t={t}
+                    />
+                  );
+                }
+                if (turn.kind === 'reasoning' && turns[idx + 1]?.kind === 'postmortem') {
+                  return (
+                    <ThreadTurnPostMortemCombined
+                      key={turn.id}
+                      reasoning={turn}
+                      postMortem={turns[idx + 1]}
                       t={t}
                     />
                   );
@@ -598,15 +645,17 @@ function EventDetail({ event, onClose, onCreateCase, onAssign, onEventUpdate, cu
                 <button
                   type="button"
                   onClick={runReinvestigate}
-                  disabled={busy}
+                  disabled={busy || postMortemGenerated}
                   className="chat-footer-btn"
                 >
                   <IconRotateCcw size={14}/> {t.chat.reinvestigate}
                 </button>
               ) : null}
-              <button type="button" onClick={runPostmortem} disabled={busy} className="chat-footer-btn">
+              {!postMortemGenerated && (
+              <button type="button" onClick={runPostmortem} disabled={busy || !rcaHasBeenGenerated} className="chat-footer-btn">
                 <IconFileText size={14}/> {t.chat.postMortem}
               </button>
+              )}
             </div>
             <div className="chat-panel__hitl-input">
               <ChatAgentInput
@@ -614,7 +663,7 @@ function EventDetail({ event, onClose, onCreateCase, onAssign, onEventUpdate, cu
                 value={aiInput}
                 onChange={setAiInput}
                 onSend={sendMessage}
-                disabled={busy}
+                disabled={busy || postMortemGenerated}
               />
             </div>
           </div>
@@ -653,7 +702,7 @@ function EventDetail({ event, onClose, onCreateCase, onAssign, onEventUpdate, cu
       className={'modal-dialog modal-dialog--split' + (isMaximized ? ' is-maximized' : '')}
       onClick={e => e.stopPropagation()}
     >
-      <div className="modal-split__left" style={{ width: `calc(${100 - rightPct}% - 0.5px)` }}>
+      <div className="modal-split__left" style={{ flex: `0 0 ${panelSplitWidth(100 - rightPct)}` }}>
         {leftPanel}
       </div>
       <div
@@ -668,21 +717,17 @@ function EventDetail({ event, onClose, onCreateCase, onAssign, onEventUpdate, cu
           <IconGripVertical size={10}/>
         </span>
       </div>
-      <div className="modal-split__right" style={{ width: `calc(${rightPct}% - 0.5px)` }}>
+      <div className="modal-split__right" style={{ flex: `0 0 ${panelSplitWidth(rightPct)}` }}>
         {rightPanel}
       </div>
     </div>
   );
 
-  if (isMaximized) {
-    return (
-      <div className="modal-fullscreen">
-        {shell}
-      </div>
-    );
-  }
-
-  return (
+  const modalNode = isMaximized ? (
+    <div className="modal-fullscreen">
+      {shell}
+    </div>
+  ) : (
     <div className="modal-overlay" onClick={onClose}>
       {shell}
       <style>{`
@@ -696,14 +741,13 @@ function EventDetail({ event, onClose, onCreateCase, onAssign, onEventUpdate, cu
       `}</style>
     </div>
   );
-}
 
-const codeInline = {
-  fontFamily:'Geist Mono, monospace', fontSize:11,
-  padding:'1px 5px', borderRadius:4,
-  background:'var(--bg-3)', border:'1px solid var(--line)',
-  color:'var(--accent)',
-};
+  // Apolo DialogPortal — render outside #root so z-50 stacks above layout-header (z-50)
+  if (typeof document !== 'undefined') {
+    return ReactDOM.createPortal(modalNode, document.body);
+  }
+  return modalNode;
+}
 
 function CaseManagementHeader({ event, hasCase, t, assignOpen, setAssignOpen, onAssign, onCloseCase }) {
   const [actionsOpen, setActionsOpen] = React.useState(false);
@@ -732,6 +776,7 @@ function CaseManagementHeader({ event, hasCase, t, assignOpen, setAssignOpen, on
         {hasCase ? (
           <div className="case-mgmt__status-col">
             <CaseStatusBadge status={event.caseStatus} caseStatus={event.case_status}/>
+            {!isCaseClosed && (
             <div style={{ position:'relative' }}>
               <button
                 type="button"
@@ -749,21 +794,21 @@ function CaseManagementHeader({ event, hasCase, t, assignOpen, setAssignOpen, on
                       type="button"
                       className="dropdown-menu__item"
                       role="menuitem"
-                      disabled={isCaseClosed}
                       onClick={() => {
                         setActionsOpen(false);
-                        if (!isCaseClosed) onCloseCase?.();
+                        onCloseCase?.();
                       }}
                     >
                       <span className="dropdown-menu__item-icon" aria-hidden="true">
                         <IconCheckCircle2 size={14}/>
                       </span>
-                      {t.cases.closeCase}
+                      <span className="dropdown-menu__item-label">{t.cases.closeCase}</span>
                     </button>
                   </div>
                 </>
               )}
             </div>
+            )}
           </div>
         ) : (
           <span className="case-mgmt__unassigned">{t.cases.noCaseOpened}</span>
@@ -1025,27 +1070,15 @@ function ChatPanelHeader({
 }
 
 function EmptyCaseState({ t, isUserAssigned, isCreating, onCreateCase }) {
-  const iconWrapStyle = {
-    width: 64, height: 64, borderRadius: 9999, marginBottom: 16,
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
-    background: isUserAssigned
-      ? 'color-mix(in oklch, var(--primary) 10%, transparent)'
-      : 'var(--muted)',
-    border: isUserAssigned
-      ? '2px solid color-mix(in oklch, var(--primary) 20%, transparent)'
-      : '2px solid color-mix(in oklch, var(--muted-foreground) 20%, transparent)',
-    color: isUserAssigned ? 'var(--primary)' : 'var(--muted-foreground)',
-  };
-
   return (
-    <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'32px 24px', textAlign:'center', minHeight:300 }}>
-      <div style={iconWrapStyle}>
+    <div className="empty-case-state">
+      <div className={'empty-case-state__icon ' + (isUserAssigned ? 'is-assigned' : 'is-unassigned')}>
         {isUserAssigned ? <IconBrainCircuit size={32}/> : <IconUserX size={32}/>}
       </div>
-      <div style={{ fontSize:18, fontWeight:600, marginBottom:6 }}>
+      <div className="empty-case-state__title">
         {isUserAssigned ? t.cases.noCaseOpened : t.alertDetail.notAssigned}
       </div>
-      <p style={{ fontSize:14, color:'var(--muted-foreground)', maxWidth:280, lineHeight:1.5, margin:'0 0 20px' }}>
+      <p className="empty-case-state__desc">
         {isUserAssigned ? t.alerts.createCaseDescription : t.alertDetail.notAssignedDescription}
       </p>
       {isUserAssigned && (
@@ -1074,31 +1107,27 @@ function OverviewPane({ event, t }) {
   const detailsText = alertDetailsText(event) || t.alertDetail.noAvailableData;
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:18 }}>
-      <div className="card" style={{ padding:16 }}>
-        <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:16 }}>
-          <div style={{
-            width:24, height:24, borderRadius:6,
-            background:'color-mix(in oklch, var(--primary) 15%, transparent)',
-            color:'var(--primary)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0,
-          }}>
+      <div className="card overview-card">
+        <div className="overview-card__head">
+          <div className="overview-card__head-icon" aria-hidden="true">
             <IconClock size={14}/>
           </div>
-          <h3 style={{ fontSize:'0.875rem', fontWeight:600, margin:0 }}>{t.alerts.description}</h3>
+          <h3 className="overview-card__head-title">{t.alerts.description}</h3>
         </div>
-        <div style={{ marginLeft:32, display:'flex', flexDirection:'column', gap:12 }}>
+        <div className="overview-card__body">
           <div>
             <p className="overview-label">{t.alertDetail.summary}</p>
-            <p style={{ fontSize:'0.875rem', lineHeight:1.6, margin:0 }}>{summaryText}</p>
+            <p className="overview-body">{summaryText}</p>
           </div>
-          <div style={{ height:1, background:'var(--border)' }}/>
+          <hr className="overview-divider"/>
           <div>
             <p className="overview-label">{t.alertDetail.details}</p>
-            <p style={{ fontSize:'0.875rem', lineHeight:1.6, margin:0 }}>{detailsText}</p>
+            <p className="overview-body">{detailsText}</p>
           </div>
-          <div style={{ height:1, background:'var(--border)' }}/>
+          <hr className="overview-divider"/>
           <div>
-            <p className="overview-label">{t.alerts.labels}</p>
-            <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+            <p className="overview-label overview-label--labels">{t.alerts.labels}</p>
+            <div className="overview-labels">
               {primaryLabels.map(([k, v]) => (
                 <span key={k} className="alert-label-chip">
                   <span className="alert-label-chip__key">{k}:</span>
@@ -1274,18 +1303,14 @@ function ActivityPane({ t }) {
     { t:'16:59', who:'Prometheus', text:'Alert fired · /api/v1/payments 500 rate above 15%'},
   ];
   return (
-    <div className="card" style={{ padding:16 }}>
-      <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:16 }}>
-        <div style={{
-          width:24, height:24, borderRadius:6,
-          background:'color-mix(in oklch, var(--primary) 15%, transparent)',
-          color:'var(--primary)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0,
-        }}>
+    <div className="card overview-card">
+      <div className="overview-card__head">
+        <div className="overview-card__head-icon" aria-hidden="true">
           <IconMessageSquare size={14}/>
         </div>
-        <h3 style={{ fontSize:'0.875rem', fontWeight:600, margin:0 }}>{t.alertDetail.activity}</h3>
+        <h3 className="overview-card__head-title">{t.alertDetail.activity}</h3>
       </div>
-      <div className="activity-timeline" style={{ marginLeft:32 }}>
+      <div className="activity-timeline overview-card__body">
         {acts.map((a, i) => (
           <div key={i} className="activity-timeline__item">
             <div className="activity-timeline__rail">
@@ -1334,88 +1359,18 @@ function AdditionalInfoSection({ event, t }) {
     setTimeout(() => setCopied(false), 2000);
   };
   return (
-    <div className="card" style={{ padding:16 }}>
-      <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:16 }}>
-        <div style={{
-          width:24, height:24, borderRadius:6,
-          background:'color-mix(in oklch, var(--primary) 15%, transparent)',
-          color:'var(--primary)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0,
-        }}>
-          <IconDatabase size={14}/>
+    <div className="json-payload-card">
+      <div className="json-payload-card__header">
+        <div className="json-payload-card__header-main">
+          <div className="json-payload-card__icon"><IconDatabase size={14}/></div>
+          <span className="json-payload-card__title">{t.alertDetail.jsonPayload}</span>
         </div>
-        <h3 style={{ fontSize:'0.875rem', fontWeight:600, margin:0 }}>{t.alertDetail.additionalInfo}</h3>
+        <button type="button" className="btn btn--ghost btn--sm" onClick={handleCopy}>
+          {copied ? <><IconCheck size={12}/> {t.common.copied}</> : <><IconCopy size={12}/> {t.common.copy}</>}
+        </button>
       </div>
-      <div className="json-payload-card">
-        <div className="json-payload-card__header">
-          <span style={{ fontSize:'0.8125rem', fontWeight:600 }}>{t.alertDetail.jsonPayload}</span>
-          <button type="button" className="btn btn--ghost btn--sm" onClick={handleCopy}>
-            {copied ? <><IconCheck size={12}/> {t.common.copied}</> : <><IconCopy size={12}/> {t.common.copy}</>}
-          </button>
-        </div>
-        <pre className="json-payload-card__body mono">{jsonString}</pre>
-      </div>
+      <pre className="json-payload-card__body mono">{jsonString}</pre>
     </div>
-  );
-}
-
-function Card({ title, icon, children }) {
-  return (
-    <div>
-      <div style={{ display:'flex', alignItems:'center', gap:7, marginBottom:10, color:'var(--muted-foreground)' }}>
-        {icon}
-        <span style={{ fontSize:'0.8125rem', fontWeight:500 }}>{title}</span>
-      </div>
-      <div className="card" style={{ padding:'14px 14px 4px' }}>{children}</div>
-    </div>
-  );
-}
-
-function KVRow({ k, v }) {
-  return (
-    <div style={{ marginBottom:14 }}>
-      <div className="mono" style={{ fontSize:10, color:'var(--fg-3)', letterSpacing:'0.14em', marginBottom:5 }}>{k}</div>
-      <div style={{ fontSize:12.5, color:'var(--fg)' }}>{v}</div>
-    </div>
-  );
-}
-
-function Section({ title, children }) {
-  return (
-    <div style={{ marginTop:18 }}>
-      <div style={{ fontSize:13, fontWeight:600, marginBottom:6 }}>{title}</div>
-      <div style={{ fontSize:12.5, lineHeight:1.6 }}>{children}</div>
-    </div>
-  );
-}
-
-function CodeBlock({ children }) {
-  return (
-    <pre className="mono" style={{
-      margin:'8px 0', padding:'8px 10px', borderRadius:7,
-      background:'var(--bg)', border:'1px solid var(--line)',
-      fontSize:10.5, color:'var(--fg-2)', lineHeight:1.5,
-      whiteSpace:'pre-wrap', overflowX:'auto',
-    }}>{children}</pre>
-  );
-}
-
-function MiniBtn({ icon, label, raw, active, onClick, tone }) {
-  const isDanger = tone === 'danger';
-  const activeBg = isDanger ? 'color-mix(in oklch, var(--sev-crit) 18%, transparent)' : 'var(--accent-glow)';
-  const activeBorder = isDanger ? 'var(--sev-crit)' : 'var(--accent-2)';
-  const activeFg = isDanger ? 'var(--sev-crit)' : 'var(--accent)';
-  return (
-    <button onClick={onClick} style={{
-      padding:'3px 8px', borderRadius:6, fontSize:10.5,
-      border: `1px solid ${active ? activeBorder : 'var(--line)'}`,
-      background: active ? activeBg : 'var(--bg-2)',
-      color: active ? activeFg : 'var(--fg-2)',
-      display:'inline-flex', alignItems:'center', gap:4,
-      cursor: onClick ? 'pointer' : 'default',
-      transition:'all .12s',
-    }}>
-      {icon}{label}
-    </button>
   );
 }
 
@@ -1647,6 +1602,15 @@ function ThreadTurnCombined({ reasoning, analysis, t }) {
   );
 }
 
+function ThreadTurnPostMortemCombined({ reasoning, postMortem, t }) {
+  return (
+    <AgentMessageShell>
+      <ReasoningDisplay steps={reasoning.steps} isStreaming={!!reasoning.isStreaming} t={t}/>
+      <ChatMarkdownBubble turn={postMortem} t={t}/>
+    </AgentMessageShell>
+  );
+}
+
 function ThreadTurn({ turn, t }) {
   if (turn.kind === 'reasoning') {
     return (
@@ -1667,36 +1631,7 @@ function ThreadTurn({ turn, t }) {
   if (turn.kind === 'postmortem') {
     return (
       <AgentMessageShell>
-        <div className="chat-msg__bubble chat-msg__bubble--agent">
-        <Section title="Post-mortem">
-          <div style={{ fontSize:11, color:'var(--fg-3)', marginBottom:6 }} className="mono">DRAFT · GENERATED BY SMART OPS AI</div>
-          <p style={{ margin:'0 0 10px', fontWeight:500 }}>Payments 500s triggered by api-gateway v2.14.3 pool regression</p>
-        </Section>
-        <Section title="Summary">
-          <p style={{ margin:0, color:'var(--fg-2)' }}>
-            Between 16:48 and 17:12 UTC, ~4.1% of requests to <code style={codeInline}>/api/v1/payments</code> returned HTTP 500. The regression was introduced by the <code style={codeInline}>api-gateway v2.14.3</code> rollout at 16:12 and remediated by a rollback at 17:12.
-          </p>
-        </Section>
-        <Section title="Timeline">
-          <ul style={{ margin:0, paddingLeft:16, color:'var(--fg-2)' }}>
-            <li><b>16:12</b> — api-gateway v2.14.3 deployed to prod eu-west-1.</li>
-            <li><b>16:48</b> — Prometheus alert fires; 5xx rate &gt; 2%.</li>
-            <li><b>16:59</b> — Case opened; Smart Ops AI begins triage.</li>
-            <li><b>17:03</b> — Rollback initiated after evidence correlates to deploy.</li>
-            <li><b>17:12</b> — Error rate back to baseline; case closed.</li>
-          </ul>
-        </Section>
-        <Section title="Impact">
-          <p style={{ margin:0, color:'var(--fg-2)' }}>~2,840 failed payment attempts, p95 latency +580ms, 0 successful retries lost.</p>
-        </Section>
-        <Section title="Action items">
-          <ul style={{ margin:0, paddingLeft:16, color:'var(--fg-2)' }}>
-            <li>Add a regression test covering pool saturation under 2× baseline RPS.</li>
-            <li>Gate api-gateway rollouts on a synthetic payments canary.</li>
-            <li>Alert when <code style={codeInline}>db.pool.waiters</code> &gt; 10 for 2m.</li>
-          </ul>
-        </Section>
-        </div>
+        <ChatMarkdownBubble turn={turn} t={t}/>
       </AgentMessageShell>
     );
   }
@@ -1758,7 +1693,7 @@ function AssigneeStack({ list }) {
         ))}
         {rest > 0 && <div className="avatar" style={{ zIndex: 0 }}>+{rest}</div>}
       </div>
-      <span style={{ fontSize:'0.875rem', color:'var(--muted-foreground)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
+      <span className="assignee-stack__label">
         {list.length === 1 ? list[0].name : `${list.length} assignees`}
       </span>
     </div>

@@ -59,9 +59,9 @@ function AppToast({ title, description, onDismiss }) {
       background: 'var(--card)', border: '1px solid var(--border)',
       borderRadius: 10, boxShadow: '0 12px 32px rgba(0,0,0,0.35)',
     }}>
-      <div style={{ fontSize: 14, fontWeight: 600, marginBottom: description ? 4 : 0 }}>{title}</div>
+      <div className={'app-toast__title' + (description ? '' : ' app-toast__title--solo')}>{title}</div>
       {description && (
-        <div style={{ fontSize: 13, color: 'var(--muted-foreground)', lineHeight: 1.4 }}>{description}</div>
+        <div className="app-toast__desc">{description}</div>
       )}
     </div>
   );
@@ -268,11 +268,10 @@ function App() {
 function AppFooter() {
   const { t } = useI18n();
   return (
-    <footer style={{
-      padding:'10px 24px', borderTop:'1px solid var(--line)',
-      fontSize:11, color:'var(--muted-foreground)', textAlign:'center',
-    }}>
-      {t.footer.version.replace('{version}', '0.1.0-mock')}
+    <footer className="app-footer">
+      <div className="app-footer-text">
+        {t.footer.version.replace('{version}', '0.1.0-mock')}
+      </div>
     </footer>
   );
 }

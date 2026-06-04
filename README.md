@@ -91,6 +91,12 @@ src/
 - [x] User menu: theme Light / Dark only (no System); logout copy; footer version
 - [x] Default locale es-ES; login i18n
 
+## Typography
+
+Typography tokens and Apolo mapping: [docs/TYPOGRAPHY.md](docs/TYPOGRAPHY.md).
+
+Run `node scripts/audit-typography.mjs` to verify no inline `fontSize`/`fontWeight` in JSX (except Recharts).
+
 ## Legacy
 
 `investigation.jsx` and `usage_v2.jsx` were removed; their script tags are not loaded from `index.html`.
