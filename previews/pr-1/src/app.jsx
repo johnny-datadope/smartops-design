@@ -234,6 +234,7 @@ function App() {
         isCreatingCase={creatingCaseIndex === detailId}
         onClose={() => setDetailId(null)}
         onCreateCase={handleRequestCreateCase}
+        onEventUpdate={() => setTick((t) => t + 1)}
         onAssign={(payload) => {
           if (detailId == null || !payload) return;
           const ev = EVENTS[detailId];
