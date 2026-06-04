@@ -57,6 +57,119 @@ function nextMockCaseId() {
   return max + 1;
 }
 
+function eventHasCaseForStages(event) {
+  return event && event.case && event.case !== '—';
+}
+
+function initInvestigationStages() {
+  const now = new Date().toISOString();
+  return {
+    current_stage: 'triage',
+    triage: { started_at: now, finished_at: null },
+    post_mortem: null,
+    closed: null,
+  };
+}
+
+function completeTriageStage(stages) {
+  const now = new Date().toISOString();
+  const triage = stages?.triage || {};
+  return {
+    current_stage: 'post_mortem',
+    triage: {
+      started_at: triage.started_at || now,
+      finished_at: now,
+    },
+    post_mortem: stages?.post_mortem ?? null,
+    closed: stages?.closed ?? null,
+  };
+}
+
+function closeCaseInvestigationStages(stages) {
+  const now = Date.now();
+  const iso = (ms) => new Date(ms).toISOString();
+  let s = stages?.triage ? { ...stages, triage: { ...stages.triage } } : initInvestigationStages();
+  if (!s.triage.finished_at) {
+    s = completeTriageStage(s);
+  }
+  const triageEndMs = new Date(s.triage.finished_at).getTime();
+  let post = s.post_mortem;
+  if (!post?.finished_at) {
+    const postStart = triageEndMs + 1000;
+    const postEnd = postStart + 60000;
+    post = { started_at: iso(postStart), finished_at: iso(postEnd) };
+  }
+  const closedStart = new Date(post.finished_at).getTime() + 1000;
+  return {
+    current_stage: 'closed',
+    triage: s.triage,
+    post_mortem: post,
+    closed: { started_at: iso(closedStart), finished_at: iso(now) },
+  };
+}
+
+function seedInvestigationStages(event) {
+  const parse = typeof parseFlexibleDate === 'function' ? parseFlexibleDate : () => null;
+  const base = parse(event.at) || new Date();
+  const iso = (d) => d.toISOString();
+  const triageStart = new Date(base.getTime() + 60000);
+  const triageEnd = new Date(triageStart.getTime() + 21000);
+  const isCaseClosed = event.case_status === 'CLOSED' || event.caseStatus === 'closed';
+
+  if (isCaseClosed) {
+    const postStart = new Date(triageEnd.getTime() + 60000);
+    const postEnd = new Date(postStart.getTime() + 3600000);
+    const closedStart = new Date(postEnd.getTime());
+    const closedEnd = new Date(closedStart.getTime() + (3 * 24 + 6) * 3600000);
+    return {
+      current_stage: 'closed',
+      triage: { started_at: iso(triageStart), finished_at: iso(triageEnd) },
+      post_mortem: { started_at: iso(postStart), finished_at: iso(postEnd) },
+      closed: { started_at: iso(closedStart), finished_at: iso(closedEnd) },
+    };
+  }
+
+  if (event._streamComplete || event.mock_scenario) {
+    return {
+      current_stage: 'post_mortem',
+      triage: { started_at: iso(triageStart), finished_at: iso(triageEnd) },
+      post_mortem: null,
+      closed: null,
+    };
+  }
+
+  return initInvestigationStages();
+}
+
+function resolveInvestigationStages(event) {
+  if (!eventHasCaseForStages(event)) {
+    return { current_stage: 'triage', triage: null, post_mortem: null, closed: null };
+  }
+  if (event.investigation_stages) {
+    return event.investigation_stages;
+  }
+  return seedInvestigationStages(event);
+}
+
+function shouldShowInvestigationStages(event) {
+  if (!eventHasCaseForStages(event)) return false;
+  return !!(event.investigation_stages
+    || event.investigation_started
+    || event._streamComplete
+    || event.mock_scenario);
+}
+
+function mockCloseCase(event) {
+  if (!event) return event;
+  event.case_status = 'CLOSED';
+  event.caseStatus = 'closed';
+  event.agent_status = 'COMPLETED';
+  event.investigation_stages = closeCaseInvestigationStages(
+    event.investigation_stages || seedInvestigationStages(event),
+  );
+  return event;
+}
+
 function mockCreateCase(event, sessionUser) {
   if (!event) return event;
   const caseId = nextMockCaseId();
@@ -67,8 +180,8 @@ function mockCreateCase(event, sessionUser) {
   event.agent_status = 'PROCESSING';
   event.investigation_started = true;
   event._streamComplete = false;
+  event.investigation_stages = initInvestigationStages();
   delete event.mock_turns;
-  delete event.mock_stages;
 
   if (sessionUser && !isCurrentUserAssigned(event, sessionUser)) {
     const entry = {
@@ -90,4 +203,11 @@ Object.assign(window, {
   isCurrentUserAssigned,
   nextMockCaseId,
   mockCreateCase,
+  mockCloseCase,
+  initInvestigationStages,
+  completeTriageStage,
+  closeCaseInvestigationStages,
+  resolveInvestigationStages,
+  shouldShowInvestigationStages,
+  eventHasCaseForStages,
 });

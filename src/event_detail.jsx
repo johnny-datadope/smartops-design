@@ -61,39 +61,6 @@ function eventHasCase(event) {
   return event && event.case && event.case !== '—';
 }
 
-function mockInvestigationStages(event) {
-  const base = parseEventAtLocal(event.at) || new Date();
-  const iso = (d) => d.toISOString();
-  const hasCase = eventHasCase(event);
-  if (!hasCase) {
-    return { current_stage: 'triage', triage: null, post_mortem: null, closed: null };
-  }
-
-  const triageStart = new Date(base.getTime() + 60000);
-  const triageEnd = new Date(triageStart.getTime() + 21000);
-  const isClosed = event.alert_status === 'CLOSED' || event.caseStatus === 'closed';
-
-  if (isClosed) {
-    const postStart = new Date(triageEnd.getTime() + 60000);
-    const postEnd = new Date(postStart.getTime() + 3600000);
-    const closedStart = new Date(postEnd.getTime());
-    const closedEnd = new Date(closedStart.getTime() + (3 * 24 + 6) * 3600000);
-    return {
-      current_stage: 'closed',
-      triage: { started_at: iso(triageStart), finished_at: iso(triageEnd) },
-      post_mortem: { started_at: iso(postStart), finished_at: iso(postEnd) },
-      closed: { started_at: iso(closedStart), finished_at: iso(closedEnd) },
-    };
-  }
-
-  return {
-    current_stage: 'triage',
-    triage: { started_at: iso(triageStart), finished_at: null },
-    post_mortem: null,
-    closed: null,
-  };
-}
-
 function ModalAlertStatusBadge({ alertStatus, status }) {
   const { t } = useI18n();
   const key = resolveAlertStatusKey(alertStatus, status);
@@ -243,7 +210,7 @@ function AlertModalHeader({
   );
 }
 
-function EventDetail({ event, onClose, onCreateCase, onAssign, currentUser, sessionUser, alertId, isCreatingCase }) {
+function EventDetail({ event, onClose, onCreateCase, onAssign, onEventUpdate, currentUser, sessionUser, alertId, isCreatingCase }) {
   const { t } = useI18n();
   const [tab, setTab] = React.useState('overview');
   const [comment, setComment] = React.useState('');
@@ -260,6 +227,7 @@ function EventDetail({ event, onClose, onCreateCase, onAssign, currentUser, sess
   const [rightPct, setRightPct] = React.useState(loadStoredRightPct);
   const [handleActive, setHandleActive] = React.useState(false);
   const streamStartedRef = React.useRef(null);
+  const [stageRev, setStageRev] = React.useState(0);
 
   const resolvedSessionUser = sessionUser || (currentUser ? getSessionUser(currentUser) : null);
   const isUserAssigned = event && resolvedSessionUser
@@ -317,29 +285,31 @@ function EventDetail({ event, onClose, onCreateCase, onAssign, currentUser, sess
 
   const runInitialInvestigationStream = React.useCallback(() => {
     if (!event || busy || typeof streamMockInvestigation !== 'function') return;
-    const streamEvent = {
-      ...event,
-      service: 'api-gateway',
-      component: 'api-gateway',
-      source_host: event.source_host || 'api-gateway-02.example.com',
-    };
+    if (!event.source_host) {
+      event.source_host = 'api-gateway-02.example.com';
+    }
     streamMockInvestigation({
-      event: streamEvent,
+      event,
       t,
       setTurns,
       setBusy,
       scenario: 'memory_leak',
       resetTurns: true,
       appendAnalysis: true,
-      onComplete: (ev) => {
-        ev._streamComplete = true;
-        ev.mock_scenario = 'memory_leak';
-        ev.case_status = 'AWAITING_ACTION';
-        ev.caseStatus = 'awaiting';
-        ev.agent_status = 'COMPLETED';
+      onComplete: () => {
+        event._streamComplete = true;
+        event.mock_scenario = 'memory_leak';
+        event.case_status = 'AWAITING_ACTION';
+        event.caseStatus = 'awaiting';
+        event.agent_status = 'COMPLETED';
+        event.investigation_stages = typeof completeTriageStage === 'function'
+          ? completeTriageStage(event.investigation_stages || initInvestigationStages())
+          : event.investigation_stages;
+        setStageRev((n) => n + 1);
+        onEventUpdate?.();
       },
     });
-  }, [event, event?.case_id, event?.investigation_started, busy, t]);
+  }, [event, event?.case_id, event?.investigation_started, busy, t, onEventUpdate]);
 
   const investigationStarted = !!event?.investigation_started;
   const streamComplete = !!event?._streamComplete;
@@ -354,6 +324,18 @@ function EventDetail({ event, onClose, onCreateCase, onAssign, currentUser, sess
     streamStartedRef.current = key;
     runInitialInvestigationStream();
   }, [event, event?.case_id, investigationStarted, streamComplete, runInitialInvestigationStream]);
+
+  const handleCloseCase = React.useCallback(() => {
+    if (!event || event.caseStatus === 'closed') return;
+    if (typeof mockCloseCase === 'function') {
+      mockCloseCase(event);
+    } else {
+      event.case_status = 'CLOSED';
+      event.caseStatus = 'closed';
+    }
+    setStageRev((n) => n + 1);
+    onEventUpdate?.();
+  }, [event, onEventUpdate]);
 
   const alertSupportUrl = useAlertHelpdeskUrl(event, alertId, currentUser, turns);
 
@@ -438,8 +420,13 @@ function EventDetail({ event, onClose, onCreateCase, onAssign, currentUser, sess
 
   const hasCase = eventHasCase(event);
   const severityKey = resolveSeverityKey(event.severity, event.sev);
-  const showInvestigationStages = hasCase && (event.mock_turns || event.mock_scenario || event._streamComplete);
-  const investigationStages = showInvestigationStages ? mockInvestigationStages(event) : null;
+  const showInvestigationStages = typeof shouldShowInvestigationStages === 'function'
+    ? shouldShowInvestigationStages(event)
+    : hasCase && (event.investigation_stages || event.investigation_started || event._streamComplete || event.mock_scenario);
+  const investigationStages = showInvestigationStages && typeof resolveInvestigationStages === 'function'
+    ? resolveInvestigationStages(event)
+    : null;
+  void stageRev;
   const tabs = [
     { id: 'overview', label: t.alertDetail.overview, shortLabel: t.alertDetail.overview },
     { id: 'activity', label: t.alertDetail.activity, shortLabel: t.alertDetail.activity },
@@ -532,6 +519,7 @@ function EventDetail({ event, onClose, onCreateCase, onAssign, currentUser, sess
           assignOpen={assignOpen}
           setAssignOpen={setAssignOpen}
           onAssign={onAssign}
+          onCloseCase={handleCloseCase}
         />
       </div>
 
@@ -711,11 +699,12 @@ const codeInline = {
   color:'var(--accent)',
 };
 
-function CaseManagementHeader({ event, hasCase, t, assignOpen, setAssignOpen, onAssign }) {
+function CaseManagementHeader({ event, hasCase, t, assignOpen, setAssignOpen, onAssign, onCloseCase }) {
   const [actionsOpen, setActionsOpen] = React.useState(false);
   const list = currentAssignees(event);
   const caseNum = caseNumberFromEvent(event);
   const cannotUnassignLast = hasCase && list.length <= 1;
+  const isCaseClosed = event?.caseStatus === 'closed' || event?.case_status === 'CLOSED';
 
   const unassignOne = (initials) => {
     if (cannotUnassignLast) return;
@@ -754,7 +743,11 @@ function CaseManagementHeader({ event, hasCase, t, assignOpen, setAssignOpen, on
                       type="button"
                       className="dropdown-menu__item"
                       role="menuitem"
-                      onClick={() => setActionsOpen(false)}
+                      disabled={isCaseClosed}
+                      onClick={() => {
+                        setActionsOpen(false);
+                        if (!isCaseClosed) onCloseCase?.();
+                      }}
                     >
                       <span className="dropdown-menu__item-icon" aria-hidden="true">
                         <IconCheckCircle2 size={14}/>
