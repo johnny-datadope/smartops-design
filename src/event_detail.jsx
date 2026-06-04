@@ -743,13 +743,6 @@ function EventDetail({ event, onClose, onCreateCase, onAssign, onEventUpdate, cu
   return modalNode;
 }
 
-const codeInline = {
-  fontFamily:'Geist Mono, monospace', fontSize:11,
-  padding:'1px 5px', borderRadius:4,
-  background:'var(--bg-3)', border:'1px solid var(--line)',
-  color:'var(--accent)',
-};
-
 function CaseManagementHeader({ event, hasCase, t, assignOpen, setAssignOpen, onAssign, onCloseCase }) {
   const [actionsOpen, setActionsOpen] = React.useState(false);
   const list = currentAssignees(event);
@@ -1071,27 +1064,15 @@ function ChatPanelHeader({
 }
 
 function EmptyCaseState({ t, isUserAssigned, isCreating, onCreateCase }) {
-  const iconWrapStyle = {
-    width: 64, height: 64, borderRadius: 9999, marginBottom: 16,
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
-    background: isUserAssigned
-      ? 'color-mix(in oklch, var(--primary) 10%, transparent)'
-      : 'var(--muted)',
-    border: isUserAssigned
-      ? '2px solid color-mix(in oklch, var(--primary) 20%, transparent)'
-      : '2px solid color-mix(in oklch, var(--muted-foreground) 20%, transparent)',
-    color: isUserAssigned ? 'var(--primary)' : 'var(--muted-foreground)',
-  };
-
   return (
-    <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'32px 24px', textAlign:'center', minHeight:300 }}>
-      <div style={iconWrapStyle}>
+    <div className="empty-case-state">
+      <div className={'empty-case-state__icon ' + (isUserAssigned ? 'is-assigned' : 'is-unassigned')}>
         {isUserAssigned ? <IconBrainCircuit size={32}/> : <IconUserX size={32}/>}
       </div>
-      <div style={{ fontSize:18, fontWeight:600, marginBottom:6 }}>
+      <div className="empty-case-state__title">
         {isUserAssigned ? t.cases.noCaseOpened : t.alertDetail.notAssigned}
       </div>
-      <p style={{ fontSize:14, color:'var(--muted-foreground)', maxWidth:280, lineHeight:1.5, margin:'0 0 20px' }}>
+      <p className="empty-case-state__desc">
         {isUserAssigned ? t.alerts.createCaseDescription : t.alertDetail.notAssignedDescription}
       </p>
       {isUserAssigned && (
@@ -1314,18 +1295,14 @@ function ActivityPane({ t }) {
     { t:'16:59', who:'Prometheus', text:'Alert fired · /api/v1/payments 500 rate above 15%'},
   ];
   return (
-    <div className="card" style={{ padding:16 }}>
-      <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:16 }}>
-        <div style={{
-          width:24, height:24, borderRadius:6,
-          background:'color-mix(in oklch, var(--primary) 15%, transparent)',
-          color:'var(--primary)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0,
-        }}>
+    <div className="card overview-card">
+      <div className="overview-card__head">
+        <div className="overview-card__head-icon" aria-hidden="true">
           <IconMessageSquare size={14}/>
         </div>
-        <h3 style={{ fontSize:'0.875rem', fontWeight:600, margin:0 }}>{t.alertDetail.activity}</h3>
+        <h3 className="overview-card__head-title">{t.alertDetail.activity}</h3>
       </div>
-      <div className="activity-timeline" style={{ marginLeft:32 }}>
+      <div className="activity-timeline overview-card__body">
         {acts.map((a, i) => (
           <div key={i} className="activity-timeline__item">
             <div className="activity-timeline__rail">
@@ -1374,9 +1351,9 @@ function ExtraPane({ event, t }) {
   return (
     <div className="json-payload-card">
       <div className="json-payload-card__header">
-        <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+        <div className="json-payload-card__header-main">
           <div className="json-payload-card__icon"><IconDatabase size={14}/></div>
-          <span style={{ fontSize:'0.8125rem', fontWeight:600 }}>{t.alertDetail.jsonPayload}</span>
+          <span className="json-payload-card__title">{t.alertDetail.jsonPayload}</span>
         </div>
         <button type="button" className="btn btn--ghost btn--sm" onClick={handleCopy}>
           {copied ? <><IconCheck size={12}/> {t.common.copied}</> : <><IconCopy size={12}/> {t.common.copy}</>}
@@ -1384,67 +1361,6 @@ function ExtraPane({ event, t }) {
       </div>
       <pre className="json-payload-card__body mono">{jsonString}</pre>
     </div>
-  );
-}
-
-function Card({ title, icon, children }) {
-  return (
-    <div>
-      <div style={{ display:'flex', alignItems:'center', gap:7, marginBottom:10, color:'var(--muted-foreground)' }}>
-        {icon}
-        <span style={{ fontSize:'0.8125rem', fontWeight:500 }}>{title}</span>
-      </div>
-      <div className="card" style={{ padding:'14px 14px 4px' }}>{children}</div>
-    </div>
-  );
-}
-
-function KVRow({ k, v }) {
-  return (
-    <div style={{ marginBottom:14 }}>
-      <div className="mono" style={{ fontSize:10, color:'var(--fg-3)', letterSpacing:'0.14em', marginBottom:5 }}>{k}</div>
-      <div style={{ fontSize:12.5, color:'var(--fg)' }}>{v}</div>
-    </div>
-  );
-}
-
-function Section({ title, children }) {
-  return (
-    <div style={{ marginTop:18 }}>
-      <div style={{ fontSize:13, fontWeight:600, marginBottom:6 }}>{title}</div>
-      <div style={{ fontSize:12.5, lineHeight:1.6 }}>{children}</div>
-    </div>
-  );
-}
-
-function CodeBlock({ children }) {
-  return (
-    <pre className="mono" style={{
-      margin:'8px 0', padding:'8px 10px', borderRadius:7,
-      background:'var(--bg)', border:'1px solid var(--line)',
-      fontSize:10.5, color:'var(--fg-2)', lineHeight:1.5,
-      whiteSpace:'pre-wrap', overflowX:'auto',
-    }}>{children}</pre>
-  );
-}
-
-function MiniBtn({ icon, label, raw, active, onClick, tone }) {
-  const isDanger = tone === 'danger';
-  const activeBg = isDanger ? 'color-mix(in oklch, var(--sev-crit) 18%, transparent)' : 'var(--accent-glow)';
-  const activeBorder = isDanger ? 'var(--sev-crit)' : 'var(--accent-2)';
-  const activeFg = isDanger ? 'var(--sev-crit)' : 'var(--accent)';
-  return (
-    <button onClick={onClick} style={{
-      padding:'3px 8px', borderRadius:6, fontSize:10.5,
-      border: `1px solid ${active ? activeBorder : 'var(--line)'}`,
-      background: active ? activeBg : 'var(--bg-2)',
-      color: active ? activeFg : 'var(--fg-2)',
-      display:'inline-flex', alignItems:'center', gap:4,
-      cursor: onClick ? 'pointer' : 'default',
-      transition:'all .12s',
-    }}>
-      {icon}{label}
-    </button>
   );
 }
 
@@ -1767,7 +1683,7 @@ function AssigneeStack({ list }) {
         ))}
         {rest > 0 && <div className="avatar" style={{ zIndex: 0 }}>+{rest}</div>}
       </div>
-      <span style={{ fontSize:'0.875rem', color:'var(--muted-foreground)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
+      <span className="assignee-stack__label">
         {list.length === 1 ? list[0].name : `${list.length} assignees`}
       </span>
     </div>
