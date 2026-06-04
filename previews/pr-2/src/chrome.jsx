@@ -318,24 +318,20 @@ function TopBar({ onLogout, route, setRoute, theme, setTheme, currentUser }) {
                     {isAdmin ? (
                       <button
                         type="button"
+                        className="user-menu-item"
                         onClick={() => { setUserOpen(false); setRoute('admin'); }}
-                        style={userMenuItem}
-                        onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
-                        onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
                       >
                         <IconShieldCheck size={14}/>
-                        <span style={{ flex: 1, textAlign: 'left' }}>{t.nav.administration}</span>
+                        <span className="user-menu-item__label">{t.nav.administration}</span>
                       </button>
                     ) : null}
                     <button
                       type="button"
+                      className="user-menu-item user-menu-item--destructive"
                       onClick={() => { setUserOpen(false); setLogoutOpen(true); }}
-                      style={{ ...userMenuItem, color: 'var(--destructive)' }}
-                      onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
-                      onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
                     >
                       <IconLogout size={14}/>
-                      <span style={{ flex: 1, textAlign: 'left' }}>{t.logout.title || t.common.logout}</span>
+                      <span className="user-menu-item__label">{t.logout.title || t.common.logout}</span>
                     </button>
                   </div>
                 </>
@@ -381,10 +377,3 @@ function TopBar({ onLogout, route, setRoute, theme, setTheme, currentUser }) {
 }
 
 Object.assign(window, { Logo, NavPill, TopBar, LogoutDialog });
-
-const userMenuItem = {
-  width: '100%', display: 'flex', alignItems: 'center', gap: 10,
-  padding: '9px 10px', borderRadius: 6, fontSize: 12.5,
-  color: 'var(--fg)', background: 'transparent', border: 0, textAlign: 'left',
-  cursor: 'pointer', fontFamily: 'inherit',
-};
