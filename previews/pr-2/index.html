@@ -1535,13 +1535,17 @@
   }
   .modal-dialog--split {
     position: relative;
-    flex-direction: row;
+    display: grid;
+    grid-template-columns: var(--split-grid-cols, calc(55% - 2.75rem) 2.75rem 45%);
     align-items: stretch;
     min-height: 0;
     min-width: 0;
     max-width: min(1600px, 90vw);
     overflow: hidden;
     box-sizing: border-box;
+  }
+  .modal-dialog--split.is-panel-collapse-animating {
+    transition: grid-template-columns 0.22s cubic-bezier(0.4, 0, 0.2, 1);
   }
   .modal-dialog.is-maximized {
     width: 100vw;
@@ -1558,7 +1562,6 @@
   .modal-split__left,
   .modal-split__right {
     display: flex; flex-direction: column; min-height: 0; min-width: 0; overflow: hidden;
-    flex: 0 0 auto;
   }
   .alert-left-panel {
     container-type: inline-size;
@@ -1592,10 +1595,46 @@
   .modal-split__left {
     min-width: 0;
     overflow: hidden;
+    position: relative;
   }
   .modal-split__left.is-collapsed {
-    flex: 0 0 auto !important;
     overflow: hidden;
+  }
+  .modal-split__left-body {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    min-width: 0;
+    overflow: hidden;
+  }
+  .modal-split__left-pane {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    min-width: 0;
+    overflow: hidden;
+    opacity: 1;
+    transform: translateX(0);
+    pointer-events: auto;
+  }
+  .modal-dialog--split.is-panel-collapse-animating .modal-split__left-pane {
+    transition:
+      opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+      transform 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .modal-split__left-pane.is-hidden {
+    opacity: 0;
+    pointer-events: none;
+  }
+  .modal-split__left-pane--expanded.is-hidden {
+    transform: translateX(-10px);
+  }
+  .modal-split__left-pane--rail.is-hidden {
+    transform: translateX(10px);
   }
   .modal-split__right {
     min-width: 0;
@@ -1606,12 +1645,22 @@
     padding: 0.75rem;
     box-sizing: border-box;
   }
-  .modal-split__right.is-expanded {
-    flex: 1 1 0 !important;
-    max-width: none !important;
+  .modal-dialog--split.is-resizing-panels {
+    transition: none;
+  }
+  .modal-dialog--split.is-resizing-panels .panel-resize-handle {
+    transition: none;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .modal-dialog--split.is-panel-collapse-animating,
+    .modal-dialog--split.is-panel-collapse-animating .modal-split__left-pane,
+    .modal-dialog--split.is-panel-collapse-animating .modal-split__divider,
+    .panel-resize-handle,
+    .left-panel-collapse-btn svg {
+      transition: none;
+    }
   }
   .modal-split__divider {
-    flex: 0 0 auto;
     display: flex;
     flex-direction: row;
     align-items: stretch;
@@ -1620,6 +1669,15 @@
     min-height: 0;
     position: relative;
     z-index: 2;
+  }
+  .modal-dialog--split.is-panel-collapse-animating .modal-split__divider {
+    transition: gap 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .modal-split__divider.is-collapsed {
+    gap: 0;
+  }
+  .left-panel-collapse-btn svg {
+    transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1);
   }
   .left-panel-collapse-btn {
     flex: 0 0 1.75rem;
@@ -1741,6 +1799,15 @@
     min-height: 100%;
     height: auto;
   }
+  .modal-split__divider .panel-resize-handle.is-collapsed-away {
+    flex: 0 0 0;
+    width: 0;
+    min-width: 0;
+    margin: 0;
+    opacity: 0;
+    pointer-events: none;
+    cursor: default;
+  }
   /* Panel resize handle — mirrors chia ResizableHandle + alert-detail-content */
   .panel-resize-handle {
     flex: 0 0 1px;
@@ -1749,7 +1816,12 @@
     position: relative;
     cursor: col-resize;
     background: color-mix(in oklch, var(--border) 40%, transparent);
-    transition: background 0.15s;
+    transition:
+      background 0.15s,
+      opacity 0.18s ease,
+      flex-basis 0.22s cubic-bezier(0.4, 0, 0.2, 1),
+      width 0.22s cubic-bezier(0.4, 0, 0.2, 1),
+      min-width 0.22s cubic-bezier(0.4, 0, 0.2, 1);
     display: flex;
     align-items: center;
     justify-content: center;
