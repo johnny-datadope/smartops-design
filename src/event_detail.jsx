@@ -1,9 +1,11 @@
 // Event detail modal — opens when a row title is clicked.
 
-const PANEL_RIGHT_PCT_KEY = 'smartops-alert-detail-right-pct';
+/** Apolo alert-detail-content.tsx ResizablePanelGroup autoSaveId */
+const PANEL_LAYOUT_STORAGE_KEY = 'alert-detail-panels';
 const PANEL_RIGHT_DEFAULT = 45;
 const PANEL_RIGHT_MIN = 30;
 const PANEL_RIGHT_MAX = 65;
+const PANEL_LEFT_COLLAPSED_WIDTH_PX = 172;
 
 /** Max textarea height (~20 lines at 13px + leading-relaxed). Update if typography changes. */
 const COMMENT_TEXTAREA_MAX_HEIGHT = 420;
@@ -21,7 +23,7 @@ const CHAT_TEXTAREA_MAX_HEIGHT = Math.ceil(
 
 function loadStoredRightPct() {
   try {
-    const raw = localStorage.getItem(PANEL_RIGHT_PCT_KEY);
+    const raw = localStorage.getItem(PANEL_LAYOUT_STORAGE_KEY);
     const v = parseFloat(raw);
     if (!Number.isNaN(v) && v >= PANEL_RIGHT_MIN && v <= PANEL_RIGHT_MAX) return v;
   } catch (_) { /* ignore */ }
@@ -76,7 +78,33 @@ function StageNode({ isCompleted, isActive }) {
   );
 }
 
-function InvestigationStageDetails({ stageData, isCompleted, isActive, nowIso, t }) {
+function getStageSummaryDuration(stages, nowIso) {
+  if (!stages) return '';
+  const closed = stages.closed;
+  if (closed?.started_at) {
+    return formatDuration(closed.started_at, closed.finished_at || nowIso);
+  }
+  const activeKey = stages.current_stage;
+  const active = activeKey ? stages[activeKey] : null;
+  if (active?.started_at) {
+    return formatDuration(active.started_at, active.finished_at || nowIso);
+  }
+  return '';
+}
+
+function InvestigationStageSummaryDuration({ stages }) {
+  const [now, setNow] = React.useState(() => new Date());
+  React.useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  const text = getStageSummaryDuration(stages, now.toISOString());
+  if (!text) return null;
+  return <p className="modal-left-rail-duration">{text}</p>;
+}
+
+function InvestigationStageDetails({ stageKey, stageData, isCompleted, isActive, nowIso, t }) {
+  if (stageKey === 'closed') return null;
   if (!stageData?.started_at) {
     return <span className="investigation-stages__dash">—</span>;
   }
@@ -97,7 +125,7 @@ function InvestigationStageDetails({ stageData, isCompleted, isActive, nowIso, t
   );
 }
 
-function InvestigationStagesTimeline({ stages, t }) {
+function InvestigationStagesTimeline({ stages, t, railOnly = false }) {
   const [now, setNow] = React.useState(() => new Date());
   React.useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 1000);
@@ -115,6 +143,30 @@ function InvestigationStagesTimeline({ stages, t }) {
     const titleClass = 'investigation-stages__title'
       + (isActive ? ' is-active' : isCompleted ? ' is-done' : '');
 
+    if (layout === 'stacked') {
+      return (
+        <div key={key} className="investigation-stages__stacked-step">
+          <div className="investigation-stages__stacked-node">
+            <StageNode isCompleted={isCompleted} isActive={isActive}/>
+          </div>
+          <div className="investigation-stages__stacked-caption">
+            <span className={titleClass}>{t.investigationStage[key]}</span>
+            <InvestigationStageDetails
+              stageKey={key}
+              stageData={stageData}
+              isCompleted={isCompleted}
+              isActive={isActive}
+              nowIso={nowIso}
+              t={t}
+            />
+          </div>
+          {!isLast && (
+            <div className={'investigation-stages__stacked-connector' + (isCompleted ? ' is-done' : '')}/>
+          )}
+        </div>
+      );
+    }
+
     if (layout === 'compact') {
       return (
         <div key={key} className="investigation-stages__v-item">
@@ -125,13 +177,20 @@ function InvestigationStagesTimeline({ stages, t }) {
           <div className="investigation-stages__v-body">
             <div className="investigation-stages__v-head">
               <span className={titleClass}>{t.investigationStage[key]}</span>
-              {stageData?.started_at && (
+              {key !== 'closed' && stageData?.started_at && (
                 <span className={'investigation-stages__duration ' + (isCompleted ? 'is-done' : isActive ? '' : '')}>
                   {formatDuration(stageData.started_at, stageData.finished_at || nowIso)}
                 </span>
               )}
             </div>
-            <InvestigationStageDetails stageData={stageData} isCompleted={isCompleted} isActive={isActive} nowIso={nowIso} t={t}/>
+            <InvestigationStageDetails
+              stageKey={key}
+              stageData={stageData}
+              isCompleted={isCompleted}
+              isActive={isActive}
+              nowIso={nowIso}
+              t={t}
+            />
           </div>
         </div>
       );
@@ -143,13 +202,30 @@ function InvestigationStagesTimeline({ stages, t }) {
           <StageNode isCompleted={isCompleted} isActive={isActive}/>
           <div className="investigation-stages__label">
             <span className={titleClass}>{t.investigationStage[key]}</span>
-            <InvestigationStageDetails stageData={stageData} isCompleted={isCompleted} isActive={isActive} nowIso={nowIso} t={t}/>
+            <InvestigationStageDetails
+              stageKey={key}
+              stageData={stageData}
+              isCompleted={isCompleted}
+              isActive={isActive}
+              nowIso={nowIso}
+              t={t}
+            />
           </div>
         </div>
         {!isLast && <div className={'investigation-stages__connector' + (isCompleted ? ' is-done' : '')}/>}
       </div>
     );
   };
+
+  if (railOnly) {
+    return (
+      <div className="investigation-stages investigation-stages--rail-only">
+        <div className="investigation-stages__stacked">
+          {keys.map((key, index) => renderStage(key, index, 'stacked'))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="investigation-stages">
@@ -165,13 +241,98 @@ function InvestigationStagesTimeline({ stages, t }) {
   );
 }
 
-function AlertModalHeader({
-  event, severityKey, onClose, isMaximized, onToggleMaximize, showActions,
-}) {
-  const { t } = useI18n();
-  const namespace = event.namespace || event.scope || 'default';
+function LeftPanelCollapseToggle({ collapsed, onToggle, t, disabled = false }) {
+  const label = collapsed ? t.alertDetail.expandEventPanel : t.alertDetail.collapseEventPanel;
   return (
-    <div className="modal-alert-header">
+    <button
+      type="button"
+      className="left-panel-collapse-btn"
+      onClick={onToggle}
+      disabled={disabled}
+      aria-label={label}
+      aria-disabled={disabled}
+      title={label}
+    >
+      {collapsed ? <IconChevronRight size={16}/> : <IconChevronLeft size={16}/>}
+    </button>
+  );
+}
+
+function CaseChromeStatusActions({ event, t, onCloseCase }) {
+  const [actionsOpen, setActionsOpen] = React.useState(false);
+  const isCaseClosed = event?.caseStatus === 'closed' || event?.case_status === 'CLOSED';
+
+  return (
+    <div className="modal-chrome-case">
+      <CaseStatusBadge status={event.caseStatus} caseStatus={event.case_status}/>
+      <div className="case-mgmt__actions-wrap">
+        <button
+          type="button"
+          className="case-actions-btn"
+          onClick={() => setActionsOpen(o => !o)}
+          aria-expanded={actionsOpen}
+        >
+          <IconChevronDown size={12}/> {t.cases.actions}
+        </button>
+        {actionsOpen && (
+          <>
+            <div onClick={() => setActionsOpen(false)} style={{ position:'fixed', inset:0, zIndex:1 }}/>
+            <div className="dropdown-menu" role="menu">
+              <button
+                type="button"
+                className="dropdown-menu__item"
+                role="menuitem"
+                disabled={isCaseClosed}
+                onClick={() => {
+                  setActionsOpen(false);
+                  if (!isCaseClosed) onCloseCase?.();
+                }}
+              >
+                <span className="dropdown-menu__item-icon" aria-hidden="true">
+                  <IconCheckCircle2 size={14}/>
+                </span>
+                {t.cases.closeCase}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ModalChromeBar({ isMaximized, onToggleMaximize, onClose, className = '', children }) {
+  const { t } = useI18n();
+  return (
+    <div className={'modal-chrome-bar' + (className ? ' ' + className : '')} role="toolbar">
+      {children}
+      <div className="modal-chrome-actions">
+        <button
+          type="button"
+          className="modal-chrome-actions__btn"
+          onClick={onToggleMaximize}
+          aria-label={isMaximized ? t.common.back : t.alertDetail.openFullPage}
+        >
+          {isMaximized ? <IconMinimize2 size={16}/> : <IconExternalLink size={16}/>}
+        </button>
+        <button
+          type="button"
+          className="modal-chrome-actions__btn"
+          onClick={onClose}
+          aria-label={t.common.close}
+        >
+          <IconClose size={16}/>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function AlertModalHeader({ event, severityKey, compact = false }) {
+  const namespace = event.namespace || event.scope || 'default';
+
+  return (
+    <div className={'modal-alert-header' + (compact ? ' modal-alert-header--compact' : '')}>
       <div className="modal-alert-header__main">
         <div className="modal-alert-header__badges">
           <span className={modalSeverityBadgeClass(event.severity, event.sev)}>{severityKey}</span>
@@ -179,33 +340,26 @@ function AlertModalHeader({
         </div>
         <h1 className="modal-alert-header__title">{event.title}</h1>
         <p className="modal-alert-header__meta">
-          <span>{event.service}</span>
-          <span className="modal-alert-header__meta-sep">·</span>
-          <span>{namespace}</span>
-          <span className="modal-alert-header__meta-sep">·</span>
-          <span>{formatTimestamp(event.at)}</span>
+          {compact ? (
+            <>
+              <span className="modal-alert-header__meta-line">
+                <span>{event.service}</span>
+                <span className="modal-alert-header__meta-sep">·</span>
+                <span>{namespace}</span>
+              </span>
+              <span className="modal-alert-header__meta-time">{formatTimestamp(event.at)}</span>
+            </>
+          ) : (
+            <>
+              <span>{event.service}</span>
+              <span className="modal-alert-header__meta-sep">·</span>
+              <span>{namespace}</span>
+              <span className="modal-alert-header__meta-sep">·</span>
+              <span>{formatTimestamp(event.at)}</span>
+            </>
+          )}
         </p>
       </div>
-      {showActions && (
-        <div className="modal-alert-header__actions">
-          <button
-            type="button"
-            className="modal-alert-header__action-btn"
-            onClick={onToggleMaximize}
-            aria-label={isMaximized ? t.common.back : t.alertDetail.openFullPage}
-          >
-            {isMaximized ? <IconMinimize2 size={16}/> : <IconExternalLink size={16}/>}
-          </button>
-          <button
-            type="button"
-            className="modal-alert-header__action-btn"
-            onClick={onClose}
-            aria-label={t.common.close}
-          >
-            <IconClose size={16}/>
-          </button>
-        </div>
-      )}
     </div>
   );
 }
@@ -220,12 +374,19 @@ function EventDetail({ event, onClose, onCreateCase, onAssign, onEventUpdate, cu
   const [feedback, setFeedback] = React.useState(null);
   const [shareOpen, setShareOpen] = React.useState(false);
   const [copied, setCopied] = React.useState(false);
-  const [isMaximized, setIsMaximized] = React.useState(false);
   const isMobile = useIsMobile();
+  const [isMaximized, setIsMaximized] = React.useState(() => (
+    typeof window !== 'undefined' && window.innerWidth < window.BREAKPOINT.TABLET
+  ));
   const [mobileView, setMobileView] = React.useState('detail');
+
+  React.useEffect(() => {
+    if (isMobile) setIsMaximized(true);
+  }, [isMobile]);
   const containerRef = React.useRef(null);
   const [rightPct, setRightPct] = React.useState(loadStoredRightPct);
   const [handleActive, setHandleActive] = React.useState(false);
+  const [leftPanelCollapsed, setLeftPanelCollapsed] = React.useState(false);
   const streamStartedRef = React.useRef(null);
   const [stageRev, setStageRev] = React.useState(0);
 
@@ -439,14 +600,19 @@ function EventDetail({ event, onClose, onCreateCase, onAssign, onEventUpdate, cu
       const el = containerRef.current;
       if (!el) return;
       const rect = el.getBoundingClientRect();
-      const pct = ((rect.right - ev.clientX) / rect.width) * 100;
+      const divider = el.querySelector('.modal-split__divider');
+      const dividerW = divider ? divider.getBoundingClientRect().width : 0;
+      const trackWidth = rect.width - dividerW;
+      if (trackWidth <= 0) return;
+      const rightWidth = rect.right - ev.clientX;
+      const pct = (rightWidth / trackWidth) * 100;
       setRightPct(Math.min(PANEL_RIGHT_MAX, Math.max(PANEL_RIGHT_MIN, pct)));
     };
     const onUp = () => {
       setHandleActive(false);
       setRightPct((cur) => {
         const rounded = Math.round(cur * 10) / 10;
-        try { localStorage.setItem(PANEL_RIGHT_PCT_KEY, String(rounded)); } catch (_) { /* ignore */ }
+        try { localStorage.setItem(PANEL_LAYOUT_STORAGE_KEY, String(rounded)); } catch (_) { /* ignore */ }
         return rounded;
       });
       window.removeEventListener('mousemove', onMove);
@@ -456,17 +622,18 @@ function EventDetail({ event, onClose, onCreateCase, onAssign, onEventUpdate, cu
     window.addEventListener('mouseup', onUp);
   };
 
-  const leftPanel = (
+  const canCollapseLeftPanel = !isMobile;
+  const leftPanelCollapsedEffective = canCollapseLeftPanel && leftPanelCollapsed;
+
+  const toggleLeftPanelCollapsed = () => {
+    if (!canCollapseLeftPanel) return;
+    setLeftPanelCollapsed(cur => !cur);
+  };
+
+  const leftPanelExpanded = (
     <div className="modal-split__panel">
       <div className="modal-left-fixed">
-        <AlertModalHeader
-          event={event}
-          severityKey={severityKey}
-          onClose={onClose}
-          isMaximized={isMaximized}
-          onToggleMaximize={() => setIsMaximized(m => !m)}
-          showActions={!isMobile}
-        />
+        <AlertModalHeader event={event} severityKey={severityKey}/>
 
         {investigationStages && (
           <InvestigationStagesTimeline stages={investigationStages} t={t}/>
@@ -504,6 +671,22 @@ function EventDetail({ event, onClose, onCreateCase, onAssign, onEventUpdate, cu
     </div>
   );
 
+  const leftPanelCollapsedView = (
+    <div className="modal-split__panel modal-split__panel--rail-only">
+      <div className="modal-left-fixed modal-left-fixed--rail-summary">
+        <AlertModalHeader event={event} severityKey={severityKey} compact/>
+        <InvestigationStageSummaryDuration stages={investigationStages}/>
+      </div>
+      {investigationStages ? (
+        <InvestigationStagesTimeline stages={investigationStages} t={t} railOnly/>
+      ) : (
+        <div className="left-panel-rail-placeholder" aria-hidden="true"/>
+      )}
+    </div>
+  );
+
+  const leftPanel = leftPanelCollapsedEffective ? leftPanelCollapsedView : leftPanelExpanded;
+
   const rightPanel = (
     <div className="chat-panel chat-scroll">
       <div className="chat-panel__section--shrink">
@@ -514,7 +697,6 @@ function EventDetail({ event, onClose, onCreateCase, onAssign, onEventUpdate, cu
           assignOpen={assignOpen}
           setAssignOpen={setAssignOpen}
           onAssign={onAssign}
-          onCloseCase={handleCloseCase}
         />
       </div>
 
@@ -611,6 +793,18 @@ function EventDetail({ event, onClose, onCreateCase, onAssign, onEventUpdate, cu
     </div>
   );
 
+  const modalChrome = (
+    <ModalChromeBar
+      isMaximized={isMaximized}
+      onToggleMaximize={() => setIsMaximized(m => !m)}
+      onClose={onClose}
+    >
+      {hasCase ? (
+        <CaseChromeStatusActions event={event} t={t} onCloseCase={handleCloseCase}/>
+      ) : null}
+    </ModalChromeBar>
+  );
+
   const shell = isMobile ? (
     <div
       className={'modal-dialog' + (isMaximized ? ' is-maximized' : '')}
@@ -623,9 +817,9 @@ function EventDetail({ event, onClose, onCreateCase, onAssign, onEventUpdate, cu
         <button type="button" className={'modal-mobile-tab' + (mobileView === 'chat' ? ' is-active' : '')} onClick={() => setMobileView('chat')}>
           <IconBrainCircuit size={14}/> {t.chat.aiChatTab}
         </button>
-        <button type="button" className="modal-mobile-close" onClick={onClose} aria-label={t.common.close}>
-          <IconClose size={16}/>
-        </button>
+        <div className="modal-mobile-bar__chrome">
+          {modalChrome}
+        </div>
       </div>
       <div className="modal-mobile-body">
         {mobileView === 'detail' ? leftPanel : (
@@ -641,22 +835,55 @@ function EventDetail({ event, onClose, onCreateCase, onAssign, onEventUpdate, cu
       className={'modal-dialog modal-dialog--split' + (isMaximized ? ' is-maximized' : '')}
       onClick={e => e.stopPropagation()}
     >
-      <div className="modal-split__left" style={{ width: `calc(${100 - rightPct}% - 0.5px)` }}>
+      {modalChrome}
+      <div
+        className={'modal-split__left' + (leftPanelCollapsedEffective ? ' is-collapsed' : '')}
+        style={leftPanelCollapsedEffective
+          ? {
+            flex: `0 0 ${PANEL_LEFT_COLLAPSED_WIDTH_PX}px`,
+            minWidth: PANEL_LEFT_COLLAPSED_WIDTH_PX,
+            maxWidth: PANEL_LEFT_COLLAPSED_WIDTH_PX,
+          }
+          : {
+            flex: `1 1 ${100 - rightPct}%`,
+            minWidth: 0,
+            maxWidth: '70%',
+          }}
+      >
         {leftPanel}
       </div>
-      <div
-        className={'panel-resize-handle' + (handleActive ? ' is-active' : '')}
-        onMouseDown={startResize}
-        role="separator"
-        aria-orientation="vertical"
-        aria-label="Resize panels"
-        tabIndex={0}
-      >
-        <span className="panel-resize-handle__grip" aria-hidden="true">
-          <IconGripVertical size={10}/>
-        </span>
+      <div className={'modal-split__divider' + (leftPanelCollapsedEffective ? ' is-collapsed' : '')}>
+        <LeftPanelCollapseToggle
+          collapsed={leftPanelCollapsedEffective}
+          onToggle={toggleLeftPanelCollapsed}
+          disabled={!canCollapseLeftPanel}
+          t={t}
+        />
+        {!leftPanelCollapsedEffective && (
+          <div
+            className={'panel-resize-handle' + (handleActive ? ' is-active' : '')}
+            onMouseDown={startResize}
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize panels"
+            tabIndex={0}
+          >
+            <span className="panel-resize-handle__grip" aria-hidden="true">
+              <IconGripVertical size={10}/>
+            </span>
+          </div>
+        )}
       </div>
-      <div className="modal-split__right" style={{ width: `calc(${rightPct}% - 0.5px)` }}>
+      <div
+        className={'modal-split__right' + (leftPanelCollapsedEffective ? ' is-expanded' : '')}
+        style={leftPanelCollapsedEffective
+          ? { flex: '1 1 0', minWidth: 0, maxWidth: 'none' }
+          : {
+            flex: `1 1 ${rightPct}%`,
+            minWidth: 0,
+            maxWidth: '65%',
+          }}
+      >
         {rightPanel}
       </div>
     </div>
@@ -693,12 +920,10 @@ const codeInline = {
   color:'var(--accent)',
 };
 
-function CaseManagementHeader({ event, hasCase, t, assignOpen, setAssignOpen, onAssign, onCloseCase }) {
-  const [actionsOpen, setActionsOpen] = React.useState(false);
+function CaseManagementHeader({ event, hasCase, t, assignOpen, setAssignOpen, onAssign }) {
   const list = currentAssignees(event);
   const caseNum = caseNumberFromEvent(event);
   const cannotUnassignLast = hasCase && list.length <= 1;
-  const isCaseClosed = event?.caseStatus === 'closed' || event?.case_status === 'CLOSED';
 
   const unassignOne = (initials) => {
     if (cannotUnassignLast) return;
@@ -717,43 +942,7 @@ function CaseManagementHeader({ event, hasCase, t, assignOpen, setAssignOpen, on
             {hasCase && caseNum != null ? `${t.cases.title} #${caseNum}` : t.cases.title}
           </span>
         </div>
-        {hasCase ? (
-          <div className="case-mgmt__status-col">
-            <CaseStatusBadge status={event.caseStatus} caseStatus={event.case_status}/>
-            <div style={{ position:'relative' }}>
-              <button
-                type="button"
-                className="case-actions-btn"
-                onClick={() => setActionsOpen(o => !o)}
-                aria-expanded={actionsOpen}
-              >
-                <IconChevronDown size={12}/> {t.cases.actions}
-              </button>
-              {actionsOpen && (
-                <>
-                  <div onClick={() => setActionsOpen(false)} style={{ position:'fixed', inset:0, zIndex:1 }}/>
-                  <div className="dropdown-menu" role="menu">
-                    <button
-                      type="button"
-                      className="dropdown-menu__item"
-                      role="menuitem"
-                      disabled={isCaseClosed}
-                      onClick={() => {
-                        setActionsOpen(false);
-                        if (!isCaseClosed) onCloseCase?.();
-                      }}
-                    >
-                      <span className="dropdown-menu__item-icon" aria-hidden="true">
-                        <IconCheckCircle2 size={14}/>
-                      </span>
-                      {t.cases.closeCase}
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-        ) : (
+        {!hasCase && (
           <span className="case-mgmt__unassigned">{t.cases.noCaseOpened}</span>
         )}
       </div>
