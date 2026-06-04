@@ -39,14 +39,7 @@ function AdministrationPage({ section, setSection, currentUser }) {
           padding: collapsed ? '0 0 12px' : '0 12px 12px',
         }}>
           {!collapsed && (
-            <p style={{
-              margin: 0,
-              fontSize: '0.75rem',
-              fontWeight: 600,
-              letterSpacing: '0.05em',
-              textTransform: 'uppercase',
-              color: 'var(--muted-foreground)',
-            }}>{t.admin.sidebar.title}</p>
+            <p className="admin-sidebar-label">{t.admin.sidebar.title}</p>
           )}
           <button
             type="button"

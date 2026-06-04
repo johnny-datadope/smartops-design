@@ -13,22 +13,15 @@ function Login({ onLogin }) {
   };
 
   return (
-    <div style={{
-      minHeight: '100vh',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      background: 'var(--background)',
-      padding: 24,
-    }}>
-      <div className="card" style={{ width: '100%', maxWidth: 384, padding: '1.5rem 1.75rem' }}>
-        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
+    <div className="login-page">
+      <div className="card login-card">
+        <div className="login-card__logo">
           <Wordmark/>
         </div>
 
-        <div style={{ textAlign: 'center', marginBottom: 18 }}>
-          <div style={{ fontSize: '1.375rem', fontWeight: 600, margin: 0 }}>{t.login.title}</div>
-          <div style={{ fontSize: '0.875rem', color: 'var(--muted-foreground)', marginTop: 4 }}>
-            {t.login.subtitle}
-          </div>
+        <div className="login-card__intro">
+          <div className="login-card__title">{t.login.title}</div>
+          <div className="login-card__subtitle">{t.login.subtitle}</div>
         </div>
 
         <Field label={t.login.username}>
@@ -75,15 +68,15 @@ function Login({ onLogin }) {
           {busy ? t.login.submitting : t.login.submit}
         </button>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '18px 0 14px' }}>
-          <div style={{ flex: 1, height: 1, background: 'var(--border)' }}/>
-          <span style={{ fontSize: 11, color: 'var(--muted-foreground)', textTransform: 'uppercase' }}>{t.login.or}</span>
-          <div style={{ flex: 1, height: 1, background: 'var(--border)' }}/>
+        <div className="login-divider">
+          <div className="login-divider__line"/>
+          <span className="login-divider__text">{t.login.or}</span>
+          <div className="login-divider__line"/>
         </div>
 
         <button onClick={() => signIn('google')} className="btn btn--outline" style={{ width: '100%' }}>
           <IconGoogle size={18}/>
-          <span style={{ flex: 1, textAlign: 'left', fontSize: '0.8125rem' }}>{t.login.continueWithGoogle}</span>
+          <span className="login-google__text">{t.login.continueWithGoogle}</span>
         </button>
       </div>
     </div>
@@ -109,8 +102,8 @@ function Wordmark() {
 
 function Field({ label, children }) {
   return (
-    <div style={{ marginBottom: 10 }}>
-      <div style={{ fontSize: '0.875rem', fontWeight: 500, marginBottom: 5 }}>{label}</div>
+    <div className="login-field">
+      <div className="login-field__label">{label}</div>
       {children}
     </div>
   );
