@@ -81,11 +81,12 @@ function StageNode({ isCompleted, isActive }) {
 function getStageSummaryDuration(stages, nowIso) {
   if (!stages) return '';
   const closed = stages.closed;
-  if (closed?.started_at) {
-    return formatDuration(closed.started_at, closed.finished_at || nowIso);
+  if (closed?.finished_at) {
+    return formatDuration(closed.started_at, closed.finished_at);
   }
   const activeKey = stages.current_stage;
-  const active = activeKey ? stages[activeKey] : null;
+  if (!activeKey || activeKey === 'closed') return '';
+  const active = stages[activeKey];
   if (active?.started_at) {
     return formatDuration(active.started_at, active.finished_at || nowIso);
   }
@@ -104,7 +105,7 @@ function InvestigationStageSummaryDuration({ stages }) {
 }
 
 function InvestigationStageDetails({ stageKey, stageData, isCompleted, isActive, nowIso, t }) {
-  if (stageKey === 'closed') return null;
+  if (stageKey === 'closed' && !stageData?.finished_at) return null;
   if (!stageData?.started_at) {
     return <span className="investigation-stages__dash">—</span>;
   }
@@ -177,7 +178,7 @@ function InvestigationStagesTimeline({ stages, t, railOnly = false }) {
           <div className="investigation-stages__v-body">
             <div className="investigation-stages__v-head">
               <span className={titleClass}>{t.investigationStage[key]}</span>
-              {key !== 'closed' && stageData?.started_at && (
+              {(key !== 'closed' || stageData?.finished_at) && stageData?.started_at && (
                 <span className={'investigation-stages__duration ' + (isCompleted ? 'is-done' : isActive ? '' : '')}>
                   {formatDuration(stageData.started_at, stageData.finished_at || nowIso)}
                 </span>
@@ -502,6 +503,7 @@ function EventDetail({ event, onClose, onCreateCase, onAssign, onEventUpdate, cu
   }, [turns]);
 
   const rcaHasBeenGenerated = turns.some(t => t.kind === 'analysis');
+  const postMortemGenerated = turns.some(t => t.kind === 'postmortem');
   const canReinvestigate = turns.some(t => t.kind === 'user');
 
   const handleFeedback = (type) => {
@@ -523,32 +525,42 @@ function EventDetail({ event, onClose, onCreateCase, onAssign, onEventUpdate, cu
   };
 
   const runPostmortem = () => {
-    if (busy) return;
+    if (busy || postMortemGenerated) return;
     setBusy(true);
+    if (typeof startPostMortemStage === 'function') {
+      event.investigation_stages = startPostMortemStage(
+        event.investigation_stages
+          || (typeof resolveInvestigationStages === 'function' ? resolveInvestigationStages(event) : null),
+      );
+      setStageRev((n) => n + 1);
+      onEventUpdate?.();
+    }
     const rid = 'r' + Date.now();
-    setTurns(ts => [...ts, { id: rid, kind: 'reasoning', isStreaming: true, steps: [] }]);
-    const stream = [
-      { label: 'Drafting post-mortem…', isCompleted: true, toolCalls: [] },
-      { label: 'Gathering timeline from alerts, deploys and comments…', isCompleted: true, toolCalls: [] },
-      { label: 'Summarising impact and writing action items…', isCompleted: true, toolCalls: [] },
-    ];
-    let i = 0;
-    const pushStep = () => {
-      if (i >= stream.length) {
-        setTurns(ts => [
-          ...ts.map(t => t.id === rid ? { ...t, isStreaming: false } : t),
-          { id: 'p' + Date.now(), kind: 'postmortem' },
-        ]);
-        setBusy(false);
-        return;
+    const stepLabel = t.irisAgentStep?.postMortem || t.chat.postMortem;
+    const reasoningStep = { label: stepLabel, isCompleted: false, toolCalls: [] };
+    setTurns(ts => [...ts, { id: rid, kind: 'reasoning', isStreaming: true, steps: [reasoningStep] }]);
+
+    const finish = () => {
+      const markdown = typeof buildMockPostMortemMarkdown === 'function'
+        ? buildMockPostMortemMarkdown(event, t)
+        : '';
+      setTurns(ts => [
+        ...ts.map(turn => turn.id === rid
+          ? { ...turn, isStreaming: false, steps: [{ label: stepLabel, isCompleted: true, toolCalls: [] }] }
+          : turn),
+        { id: 'p' + Date.now(), kind: 'postmortem', markdown },
+      ]);
+      if (typeof mockAutoCloseCaseAfterPostMortem === 'function') {
+        mockAutoCloseCaseAfterPostMortem(event);
+      } else if (typeof completePostMortemStage === 'function') {
+        event.investigation_stages = completePostMortemStage(event.investigation_stages);
       }
-      const step = stream[i++];
-      setTurns(ts => ts.map(t => t.id === rid
-        ? { ...t, steps: [...t.steps, step] }
-        : t));
-      setTimeout(pushStep, 600);
+      setStageRev((n) => n + 1);
+      onEventUpdate?.();
+      setBusy(false);
     };
-    setTimeout(pushStep, 300);
+
+    setTimeout(finish, 2200);
   };
 
   const sendMessage = () => {
@@ -737,12 +749,25 @@ function EventDetail({ event, onClose, onCreateCase, onAssign, onEventUpdate, cu
                 if (turn.kind === 'analysis' && idx > 0 && turns[idx - 1].kind === 'reasoning') {
                   return null;
                 }
+                if (turn.kind === 'postmortem' && idx > 0 && turns[idx - 1].kind === 'reasoning') {
+                  return null;
+                }
                 if (turn.kind === 'reasoning' && turns[idx + 1]?.kind === 'analysis') {
                   return (
                     <ThreadTurnCombined
                       key={turn.id}
                       reasoning={turn}
                       analysis={turns[idx + 1]}
+                      t={t}
+                    />
+                  );
+                }
+                if (turn.kind === 'reasoning' && turns[idx + 1]?.kind === 'postmortem') {
+                  return (
+                    <ThreadTurnPostMortemCombined
+                      key={turn.id}
+                      reasoning={turn}
+                      postMortem={turns[idx + 1]}
                       t={t}
                     />
                   );
@@ -768,15 +793,17 @@ function EventDetail({ event, onClose, onCreateCase, onAssign, onEventUpdate, cu
                 <button
                   type="button"
                   onClick={runReinvestigate}
-                  disabled={busy}
+                  disabled={busy || postMortemGenerated}
                   className="chat-footer-btn"
                 >
                   <IconRotateCcw size={14}/> {t.chat.reinvestigate}
                 </button>
               ) : null}
-              <button type="button" onClick={runPostmortem} disabled={busy} className="chat-footer-btn">
+              {!postMortemGenerated && (
+              <button type="button" onClick={runPostmortem} disabled={busy || !rcaHasBeenGenerated} className="chat-footer-btn">
                 <IconFileText size={14}/> {t.chat.postMortem}
               </button>
+              )}
             </div>
             <div className="chat-panel__hitl-input">
               <ChatAgentInput
@@ -784,7 +811,7 @@ function EventDetail({ event, onClose, onCreateCase, onAssign, onEventUpdate, cu
                 value={aiInput}
                 onChange={setAiInput}
                 onSend={sendMessage}
-                disabled={busy}
+                disabled={busy || postMortemGenerated}
               />
             </div>
           </div>
@@ -1805,6 +1832,15 @@ function ThreadTurnCombined({ reasoning, analysis, t }) {
   );
 }
 
+function ThreadTurnPostMortemCombined({ reasoning, postMortem, t }) {
+  return (
+    <AgentMessageShell>
+      <ReasoningDisplay steps={reasoning.steps} isStreaming={!!reasoning.isStreaming} t={t}/>
+      <ChatMarkdownBubble turn={postMortem} t={t}/>
+    </AgentMessageShell>
+  );
+}
+
 function ThreadTurn({ turn, t }) {
   if (turn.kind === 'reasoning') {
     return (
@@ -1825,36 +1861,7 @@ function ThreadTurn({ turn, t }) {
   if (turn.kind === 'postmortem') {
     return (
       <AgentMessageShell>
-        <div className="chat-msg__bubble chat-msg__bubble--agent">
-        <Section title="Post-mortem">
-          <div style={{ fontSize:11, color:'var(--fg-3)', marginBottom:6 }} className="mono">DRAFT · GENERATED BY SMART OPS AI</div>
-          <p style={{ margin:'0 0 10px', fontWeight:500 }}>Payments 500s triggered by api-gateway v2.14.3 pool regression</p>
-        </Section>
-        <Section title="Summary">
-          <p style={{ margin:0, color:'var(--fg-2)' }}>
-            Between 16:48 and 17:12 UTC, ~4.1% of requests to <code style={codeInline}>/api/v1/payments</code> returned HTTP 500. The regression was introduced by the <code style={codeInline}>api-gateway v2.14.3</code> rollout at 16:12 and remediated by a rollback at 17:12.
-          </p>
-        </Section>
-        <Section title="Timeline">
-          <ul style={{ margin:0, paddingLeft:16, color:'var(--fg-2)' }}>
-            <li><b>16:12</b> — api-gateway v2.14.3 deployed to prod eu-west-1.</li>
-            <li><b>16:48</b> — Prometheus alert fires; 5xx rate &gt; 2%.</li>
-            <li><b>16:59</b> — Case opened; Smart Ops AI begins triage.</li>
-            <li><b>17:03</b> — Rollback initiated after evidence correlates to deploy.</li>
-            <li><b>17:12</b> — Error rate back to baseline; case closed.</li>
-          </ul>
-        </Section>
-        <Section title="Impact">
-          <p style={{ margin:0, color:'var(--fg-2)' }}>~2,840 failed payment attempts, p95 latency +580ms, 0 successful retries lost.</p>
-        </Section>
-        <Section title="Action items">
-          <ul style={{ margin:0, paddingLeft:16, color:'var(--fg-2)' }}>
-            <li>Add a regression test covering pool saturation under 2× baseline RPS.</li>
-            <li>Gate api-gateway rollouts on a synthetic payments canary.</li>
-            <li>Alert when <code style={codeInline}>db.pool.waiters</code> &gt; 10 for 2m.</li>
-          </ul>
-        </Section>
-        </div>
+        <ChatMarkdownBubble turn={turn} t={t}/>
       </AgentMessageShell>
     );
   }
