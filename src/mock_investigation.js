@@ -464,6 +464,173 @@ function streamMockInvestigation({
   setTimeout(pushStep, 350);
 }
 
+/** Mirrors iris/graph/agents/post_mortem_agent.py format_post_mortem_markdown */
+function formatMockPostMortemMarkdown(report) {
+  const sections = [
+    [1, 'pm_section_executive_summary'],
+    [2, 'pm_section_incident_management'],
+    [3, 'pm_section_impact_analysis'],
+    [4, 'pm_section_timeline'],
+    [5, 'pm_section_root_cause_analysis'],
+    [6, 'pm_section_action_points'],
+    [7, 'pm_section_lessons_learned'],
+    [8, 'pm_section_recommendations'],
+  ];
+  const headers = sections.map(([num, tag]) => `### ${num}. {{${tag}}}`);
+
+  const mgmtTable = [
+    '| {{pm_table_check}} | {{pm_table_result}} | {{pm_table_additional_information}} |',
+    '| :--- | :--- | :--- |',
+    `| {{pm_row_detection}} | ${report.detection_status} | ${report.detection_info} |`,
+    `| {{pm_row_escalation}} | ${report.escalation_status} | {{pm_escalation_info}} |`,
+  ].join('\n');
+
+  const asBullets = (items, emptyTag) => {
+    const cleaned = (items || []).map(item => String(item).trim()).filter(Boolean);
+    return cleaned.length
+      ? cleaned.map(item => `* ${item}`).join('\n')
+      : `{{${emptyTag}}}`;
+  };
+
+  const timelineLines = String(report.timeline || '')
+    .split('\n')
+    .map(line => line.trim())
+    .filter(Boolean);
+  const timeline = timelineLines.length
+    ? timelineLines.map(line => `* ${line}`).join('\n')
+    : '{{pm_empty_timeline}}';
+
+  return [
+    `# ${report.incident_title} | {{pm_label_severity}}: ${report.severity}`,
+    '',
+    headers[0],
+    '',
+    report.executive_summary,
+    '',
+    '{{pm_label_affected_systems}}',
+    report.affected_systems,
+    '',
+    headers[1],
+    '',
+    mgmtTable,
+    '',
+    '{{pm_label_timings}}',
+    `* {{pm_label_start}} ${report.start_date}`,
+    `* {{pm_label_report_generated}} ${report.end_date}`,
+    `* {{pm_label_elapsed}} ${report.duration}`,
+    '',
+    headers[2],
+    '',
+    report.impact_analysis,
+    '',
+    headers[3],
+    '',
+    timeline,
+    '',
+    headers[4],
+    '',
+    report.root_cause_description,
+    '',
+    headers[5],
+    '',
+    asBullets(report.action_points, 'pm_empty_actions'),
+    '',
+    headers[6],
+    '',
+    asBullets(report.lessons_learned, 'pm_empty_lessons'),
+    '',
+    headers[7],
+    '',
+    asBullets(report.recommendations, 'pm_empty_recommendations'),
+    '',
+    '---',
+    '{{pm_footer}}',
+  ].join('\n');
+}
+
+function formatElapsedHms(startDate, endDate) {
+  const start = typeof parseFlexibleDate === 'function' ? parseFlexibleDate(startDate) : new Date(startDate);
+  const end = typeof parseFlexibleDate === 'function' ? parseFlexibleDate(endDate) : new Date(endDate);
+  if (!start || !end) return '00:00:00';
+  const seconds = Math.max(0, Math.floor((end.getTime() - start.getTime()) / 1000));
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
+function buildGenericPostMortemReport(event, t, scenarioKey, params) {
+  const blockKey = { memory_leak: 'memoryLeak', api_errors: 'apiErrors', disk_space: 'diskSpace',
+    network_latency: 'networkLatency', cache_miss: 'cacheMiss', high_cpu: 'highCpu',
+    ssl_expiring: 'sslExpiring', reinvestigate: 'reinvestigate' }[scenarioKey] || 'memoryLeak';
+  const block = t.mockInvestigation?.[blockKey] || {};
+  const alertAt = typeof parseFlexibleDate === 'function'
+    ? parseFlexibleDate(event.at)
+    : new Date(event.at || Date.now());
+  const start = alertAt || new Date();
+  const end = new Date();
+  const fmt = typeof formatTimestamp === 'function' ? formatTimestamp : (d) => String(d);
+  return {
+    incident_title: fillTemplate(block.rcaTitle || event.title || params.alertName, params),
+    severity: resolveSeverityKey?.(event.severity, event.sev) || event.severity || 'Medium',
+    detection_status: 'OK',
+    detection_info: fillTemplate(block.evidence || event.detail || params.alertDescription, params),
+    escalation_status: 'OK',
+    start_date: fmt(start.toISOString ? start.toISOString() : start),
+    end_date: fmt(end.toISOString()),
+    duration: formatElapsedHms(start, end),
+    executive_summary: fillTemplate(block.rcaBody || '', params),
+    affected_systems: fillTemplate(`Service: ${params.service}; Host: ${params.host}; Component: ${params.component}`, params),
+    impact_analysis: fillTemplate(block.evidence || '', params),
+    timeline: fillTemplate(`Alert detected on ${params.host}\nSmartOps investigation completed\nPost-mortem report generated`, params),
+    root_cause_description: fillTemplate(block.rcaTitle || '', params),
+    action_points: [block.solution1, block.solution2, block.solution3, block.solution4]
+      .filter(Boolean)
+      .map(line => fillTemplate(line, params)),
+    lessons_learned: [fillTemplate('Early detection via monitoring reduced time to remediation.', params)],
+    recommendations: [block.solution1, block.solution2].filter(Boolean).map(line => fillTemplate(line, params)),
+  };
+}
+
+function buildSslPostMortemReport(event, t, params) {
+  const pm = t.mockInvestigation?.sslExpiring?.postMortem || {};
+  const alertAt = typeof parseFlexibleDate === 'function'
+    ? parseFlexibleDate(event.at)
+    : new Date(event.at || Date.now());
+  const start = alertAt || new Date();
+  const end = new Date(start.getTime() + 49 * 60 * 1000);
+  const fmt = typeof formatTimestamp === 'function' ? formatTimestamp : (d) => String(d);
+  const mapField = (value) => fillTemplate(String(value || ''), params);
+  return {
+    incident_title: mapField(pm.incidentTitle),
+    severity: pm.severity || 'Medium',
+    detection_status: 'OK',
+    detection_info: mapField(pm.detectionInfo),
+    escalation_status: 'OK',
+    start_date: fmt(start.toISOString ? start.toISOString() : start),
+    end_date: fmt(end.toISOString()),
+    duration: formatElapsedHms(start, end),
+    executive_summary: mapField(pm.executiveSummary),
+    affected_systems: mapField(pm.affectedSystems),
+    impact_analysis: mapField(pm.impactAnalysis),
+    timeline: mapField(pm.timeline),
+    root_cause_description: mapField(pm.rootCause),
+    action_points: (pm.actionPoints || []).map(mapField),
+    lessons_learned: (pm.lessonsLearned || []).map(mapField),
+    recommendations: (pm.recommendations || []).map(mapField),
+  };
+}
+
+function buildMockPostMortemMarkdown(event, t, scenarioOverride) {
+  if (!event || !t) return '';
+  const scenarioKey = getScenarioKey(event, scenarioOverride);
+  const params = eventParams(event);
+  const report = scenarioKey === 'ssl_expiring'
+    ? buildSslPostMortemReport(event, t, params)
+    : buildGenericPostMortemReport(event, t, scenarioKey, params);
+  return formatMockPostMortemMarkdown(report);
+}
+
 Object.assign(window, {
   fillTemplate,
   eventParams,
@@ -472,4 +639,6 @@ Object.assign(window, {
   buildMockDemoTurns,
   resolveInitialTurns,
   streamMockInvestigation,
+  formatMockPostMortemMarkdown,
+  buildMockPostMortemMarkdown,
 });

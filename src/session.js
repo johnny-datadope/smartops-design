@@ -63,26 +63,88 @@ function eventHasCaseForStages(event) {
 
 function initInvestigationStages() {
   const now = new Date().toISOString();
+  // Apolo (case_investigation.py): closed_started = case.created_at
   return {
     current_stage: 'triage',
     triage: { started_at: now, finished_at: null },
     post_mortem: null,
-    closed: null,
+    closed: { started_at: now, finished_at: null },
+  };
+}
+
+function ensureClosedStageStarted(stages, fallbackStart) {
+  if (!stages) return stages;
+  const start = stages.closed?.started_at || stages.triage?.started_at || fallbackStart;
+  if (!start) return stages;
+  return {
+    ...stages,
+    closed: {
+      started_at: start,
+      finished_at: stages.closed?.finished_at ?? null,
+    },
   };
 }
 
 function completeTriageStage(stages) {
   const now = new Date().toISOString();
   const triage = stages?.triage || {};
-  return {
+  const closedStart = stages?.closed?.started_at || triage.started_at || now;
+  return ensureClosedStageStarted({
     current_stage: 'post_mortem',
     triage: {
       started_at: triage.started_at || now,
       finished_at: now,
     },
     post_mortem: stages?.post_mortem ?? null,
-    closed: stages?.closed ?? null,
+    closed: { started_at: closedStart, finished_at: stages?.closed?.finished_at ?? null },
+  });
+}
+
+function startPostMortemStage(stages) {
+  const now = new Date().toISOString();
+  let s = stages ? {
+    ...stages,
+    triage: stages.triage ? { ...stages.triage } : null,
+    post_mortem: stages.post_mortem ? { ...stages.post_mortem } : null,
+    closed: stages.closed ? { ...stages.closed } : null,
+  } : initInvestigationStages();
+  if (!s.triage?.finished_at) {
+    s = completeTriageStage(s);
+  }
+  const closedStart = s.closed?.started_at || s.triage?.started_at || now;
+  return ensureClosedStageStarted({
+    ...s,
+    current_stage: 'post_mortem',
+    post_mortem: { started_at: now, finished_at: null },
+    closed: { started_at: closedStart, finished_at: s.closed?.finished_at ?? null },
+  });
+}
+
+/** Apolo: POST_MORTEM COMPLETED → current_stage closed, post_mortem + closed finished_at set */
+function completePostMortemStage(stages) {
+  const now = new Date().toISOString();
+  const s = stages || initInvestigationStages();
+  const pmStart = s.post_mortem?.started_at || now;
+  const closedStart = s.closed?.started_at || s.triage?.started_at || pmStart;
+  return {
+    ...s,
+    current_stage: 'closed',
+    post_mortem: { started_at: pmStart, finished_at: now },
+    closed: { started_at: closedStart, finished_at: now },
   };
+}
+
+/** Ceres: auto-close case when POST_MORTEM completes successfully */
+function mockAutoCloseCaseAfterPostMortem(event) {
+  if (!event) return event;
+  event.case_status = 'CLOSED';
+  event.caseStatus = 'closed';
+  event.agent_status = 'COMPLETED';
+  event.investigation_stages = completePostMortemStage(
+    event.investigation_stages
+      || (typeof seedInvestigationStages === 'function' ? seedInvestigationStages(event) : initInvestigationStages()),
+  );
+  return event;
 }
 
 function closeCaseInvestigationStages(stages) {
@@ -99,12 +161,12 @@ function closeCaseInvestigationStages(stages) {
     const postEnd = postStart + 60000;
     post = { started_at: iso(postStart), finished_at: iso(postEnd) };
   }
-  const closedStart = new Date(post.finished_at).getTime() + 1000;
+  const closedStart = s.closed?.started_at || s.triage?.started_at || iso(now);
   return {
     current_stage: 'closed',
     triage: s.triage,
     post_mortem: post,
-    closed: { started_at: iso(closedStart), finished_at: iso(now) },
+    closed: { started_at: closedStart, finished_at: iso(now) },
   };
 }
 
@@ -130,12 +192,12 @@ function seedInvestigationStages(event) {
   }
 
   if (event._streamComplete || event.mock_scenario) {
-    return {
+    return ensureClosedStageStarted({
       current_stage: 'post_mortem',
       triage: { started_at: iso(triageStart), finished_at: iso(triageEnd) },
       post_mortem: null,
-      closed: null,
-    };
+      closed: { started_at: iso(triageStart), finished_at: null },
+    });
   }
 
   return initInvestigationStages();
@@ -145,8 +207,10 @@ function resolveInvestigationStages(event) {
   if (!eventHasCaseForStages(event)) {
     return { current_stage: 'triage', triage: null, post_mortem: null, closed: null };
   }
+  const parse = typeof parseFlexibleDate === 'function' ? parseFlexibleDate : () => null;
+  const fallbackStart = (parse(event.at) || new Date()).toISOString();
   if (event.investigation_stages) {
-    return event.investigation_stages;
+    return ensureClosedStageStarted(event.investigation_stages, fallbackStart);
   }
   return seedInvestigationStages(event);
 }
@@ -216,6 +280,9 @@ Object.assign(window, {
   mockCloseCase,
   initInvestigationStages,
   completeTriageStage,
+  startPostMortemStage,
+  completePostMortemStage,
+  mockAutoCloseCaseAfterPostMortem,
   closeCaseInvestigationStages,
   resolveInvestigationStages,
   shouldShowInvestigationStages,

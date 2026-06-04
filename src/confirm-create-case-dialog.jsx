@@ -18,10 +18,10 @@ function ConfirmCreateCaseDialog({ open, onOpenChange, onConfirm, isConfirming }
         style={{ width: '100%', maxWidth: 420, padding: '1.25rem 1.5rem' }}
         onClick={e => e.stopPropagation()}
       >
-        <h2 style={{ fontSize: '1.125rem', fontWeight: 600, margin: '0 0 8px' }}>
+        <h2 className="confirm-dialog__title">
           {t.alerts.createCaseTitle}
         </h2>
-        <p style={{ fontSize: '0.875rem', color: 'var(--muted-foreground)', margin: '0 0 20px', lineHeight: 1.5 }}>
+        <p className="confirm-dialog__desc">
           {t.alerts.createCaseDescription}
         </p>
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>

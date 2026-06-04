@@ -100,7 +100,7 @@ function AssigneeCell({ event, assignee, name }) {
           {rest > 0 && <div className="avatar" style={{ zIndex: 0 }}>+{rest}</div>}
         </div>
         {list.length <= 3 && (
-          <span style={{ fontSize: '0.875rem', color: 'var(--muted-foreground)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 120 }}>
+          <span className="events-assignee-name">
             {list.map(a => a.name).join(', ')}
           </span>
         )}
@@ -324,8 +324,8 @@ function EventsTable({ events, onOpenDetail, onAnalyzeClick, onArchive, showArch
 
   return (
     <div className="card" style={{ overflow: 'hidden' }}>
-      <div style={{ overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+      <div className="table-scroll">
+        <table className="events-table">
           <thead>
             <tr style={{ background: 'var(--bg-2)' }}>
               <Th sortable active={sort.key === 'severity'} dir={sort.dir} onClick={() => toggleSort('severity')}>{t.alerts.severity}</Th>
@@ -348,7 +348,7 @@ function EventsTable({ events, onOpenDetail, onAnalyzeClick, onArchive, showArch
           <tbody>
             {pageRows.length === 0 ? (
               <tr>
-                <td colSpan={15} style={{ padding: '3rem 1.5rem', textAlign: 'center', color: 'var(--muted-foreground)', fontSize: '0.875rem' }}>
+                <td colSpan={15} className="events-table-empty">
                   {t.alerts.noAlertsMatching}
                 </td>
               </tr>
@@ -419,10 +419,10 @@ function EventsTable({ events, onOpenDetail, onAnalyzeClick, onArchive, showArch
                           boxShadow: '0 14px 28px -8px rgba(0,0,0,0.5)',
                           padding: 4, overflow: 'hidden',
                         }}>
-                          <button onClick={ev => { ev.stopPropagation(); setMenuId(null); onOpenDetail && onOpenDetail(i); }} style={menuItem}>
+                          <button onClick={ev => { ev.stopPropagation(); setMenuId(null); onOpenDetail && onOpenDetail(i); }} className={menuItem}>
                             <IconEye size={13}/> {t.common.viewDetails}
                           </button>
-                          <button onClick={ev => { ev.stopPropagation(); setMenuId(null); onArchive && onArchive(e); }} style={menuItem}>
+                          <button onClick={ev => { ev.stopPropagation(); setMenuId(null); onArchive && onArchive(e); }} className={menuItem}>
                             <IconArchive size={13}/> {showArchived ? t.common.unarchive : t.common.archive}
                           </button>
                         </div>
@@ -524,7 +524,7 @@ function ActiveFiltersBar({ filters, onChange, myInitials }) {
 
   return (
     <div className="active-filters">
-      <span style={{ fontSize: '0.875rem', color: 'var(--muted-foreground)' }}>{t.filters.activeFilters}:</span>
+      <span className="events-active-filters-label">{t.filters.activeFilters}:</span>
       {chips.map(c => (
         <span key={c.key} className="badge badge--secondary filter-chip">
           {c.label}
@@ -537,12 +537,7 @@ function ActiveFiltersBar({ filters, onChange, myInitials }) {
 
 const td = { padding:'10px 12px', verticalAlign:'middle' };
 
-const menuItem = {
-  width:'100%', display:'flex', alignItems:'center', gap:8,
-  padding:'8px 10px', borderRadius:6, fontSize:12,
-  color:'var(--fg)', background:'transparent', border:0,
-  cursor:'pointer', textAlign:'left',
-};
+const menuItem = 'events-menu-item';
 
 function normalizeSourceFilterValue(value) {
   if (value == null || value === '' || value === '—') return '';
@@ -1240,7 +1235,7 @@ function FilterMultiSelect({ label, emptyLabel, placeholderMuted, options, selec
                 </button>
               );
             }) : (
-              <p style={{ fontSize: '0.75rem', color: 'var(--muted-foreground)', margin: 0, padding: '0.25rem' }}>
+              <p className="events-popover-hint">
                 {t.filters.unspecified}
               </p>
             )}
