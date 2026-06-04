@@ -6,6 +6,9 @@ const PANEL_RIGHT_DEFAULT = 45;
 const PANEL_RIGHT_MIN = 30;
 const PANEL_RIGHT_MAX = 65;
 const PANEL_LEFT_COLLAPSED_WIDTH_PX = 172;
+/** Divider track in grid (collapse btn + optional resize handle gap). */
+const SPLIT_DIVIDER_COL_EXPANDED = '2.75rem';
+const SPLIT_DIVIDER_COL_COLLAPSED = '1.75rem';
 
 /** Max textarea height (~20 lines at 13px + leading-relaxed). Update if typography changes. */
 const COMMENT_TEXTAREA_MAX_HEIGHT = 420;
@@ -388,6 +391,8 @@ function EventDetail({ event, onClose, onCreateCase, onAssign, onEventUpdate, cu
   const [rightPct, setRightPct] = React.useState(loadStoredRightPct);
   const [handleActive, setHandleActive] = React.useState(false);
   const [leftPanelCollapsed, setLeftPanelCollapsed] = React.useState(false);
+  const [panelCollapseAnimating, setPanelCollapseAnimating] = React.useState(false);
+  const panelCollapseAnimTimerRef = React.useRef(null);
   const streamStartedRef = React.useRef(null);
   const [stageRev, setStageRev] = React.useState(0);
 
@@ -502,6 +507,12 @@ function EventDetail({ event, onClose, onCreateCase, onAssign, onEventUpdate, cu
     if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
   }, [turns]);
 
+  React.useEffect(() => () => {
+    if (panelCollapseAnimTimerRef.current != null) {
+      window.clearTimeout(panelCollapseAnimTimerRef.current);
+    }
+  }, []);
+
   const rcaHasBeenGenerated = turns.some(t => t.kind === 'analysis');
   const postMortemGenerated = turns.some(t => t.kind === 'postmortem');
   const canReinvestigate = turns.some(t => t.kind === 'user');
@@ -612,12 +623,12 @@ function EventDetail({ event, onClose, onCreateCase, onAssign, onEventUpdate, cu
       const el = containerRef.current;
       if (!el) return;
       const rect = el.getBoundingClientRect();
+      if (rect.width <= 0) return;
       const divider = el.querySelector('.modal-split__divider');
-      const dividerW = divider ? divider.getBoundingClientRect().width : 0;
-      const trackWidth = rect.width - dividerW;
-      if (trackWidth <= 0) return;
-      const rightWidth = rect.right - ev.clientX;
-      const pct = (rightWidth / trackWidth) * 100;
+      const dividerRect = divider?.getBoundingClientRect();
+      const rightEdge = dividerRect?.right ?? ev.clientX;
+      const rightWidth = rect.right - rightEdge;
+      const pct = (rightWidth / rect.width) * 100;
       setRightPct(Math.min(PANEL_RIGHT_MAX, Math.max(PANEL_RIGHT_MIN, pct)));
     };
     const onUp = () => {
@@ -639,6 +650,14 @@ function EventDetail({ event, onClose, onCreateCase, onAssign, onEventUpdate, cu
 
   const toggleLeftPanelCollapsed = () => {
     if (!canCollapseLeftPanel) return;
+    setPanelCollapseAnimating(true);
+    if (panelCollapseAnimTimerRef.current != null) {
+      window.clearTimeout(panelCollapseAnimTimerRef.current);
+    }
+    panelCollapseAnimTimerRef.current = window.setTimeout(() => {
+      setPanelCollapseAnimating(false);
+      panelCollapseAnimTimerRef.current = null;
+    }, 240);
     setLeftPanelCollapsed(cur => !cur);
   };
 
@@ -697,7 +716,28 @@ function EventDetail({ event, onClose, onCreateCase, onAssign, onEventUpdate, cu
     </div>
   );
 
-  const leftPanel = leftPanelCollapsedEffective ? leftPanelCollapsedView : leftPanelExpanded;
+  const leftPanelBody = (
+    <div className="modal-split__left-body">
+      <div
+        className={
+          'modal-split__left-pane modal-split__left-pane--expanded'
+          + (leftPanelCollapsedEffective ? ' is-hidden' : '')
+        }
+        aria-hidden={leftPanelCollapsedEffective}
+      >
+        {leftPanelExpanded}
+      </div>
+      <div
+        className={
+          'modal-split__left-pane modal-split__left-pane--rail'
+          + (leftPanelCollapsedEffective ? '' : ' is-hidden')
+        }
+        aria-hidden={!leftPanelCollapsedEffective}
+      >
+        {leftPanelCollapsedView}
+      </div>
+    </div>
+  );
 
   const rightPanel = (
     <div className="chat-panel chat-scroll">
@@ -849,7 +889,7 @@ function EventDetail({ event, onClose, onCreateCase, onAssign, onEventUpdate, cu
         </div>
       </div>
       <div className="modal-mobile-body">
-        {mobileView === 'detail' ? leftPanel : (
+        {mobileView === 'detail' ? leftPanelExpanded : (
           <div style={{ display:'flex', flexDirection:'column', minHeight:0, flex:1, background:'var(--background)' }}>
             {rightPanel}
           </div>
@@ -859,25 +899,22 @@ function EventDetail({ event, onClose, onCreateCase, onAssign, onEventUpdate, cu
   ) : (
     <div
       ref={containerRef}
-      className={'modal-dialog modal-dialog--split' + (isMaximized ? ' is-maximized' : '')}
+      className={
+        'modal-dialog modal-dialog--split'
+        + (isMaximized ? ' is-maximized' : '')
+        + (handleActive ? ' is-resizing-panels' : '')
+        + (panelCollapseAnimating ? ' is-panel-collapse-animating' : '')
+      }
+      style={{
+        '--split-grid-cols': leftPanelCollapsedEffective
+          ? `${PANEL_LEFT_COLLAPSED_WIDTH_PX}px ${SPLIT_DIVIDER_COL_COLLAPSED} calc(100% - ${PANEL_LEFT_COLLAPSED_WIDTH_PX}px - ${SPLIT_DIVIDER_COL_COLLAPSED})`
+          : `calc(100% - ${rightPct}% - ${SPLIT_DIVIDER_COL_EXPANDED}) ${SPLIT_DIVIDER_COL_EXPANDED} ${rightPct}%`,
+      }}
       onClick={e => e.stopPropagation()}
     >
       {modalChrome}
-      <div
-        className={'modal-split__left' + (leftPanelCollapsedEffective ? ' is-collapsed' : '')}
-        style={leftPanelCollapsedEffective
-          ? {
-            flex: `0 0 ${PANEL_LEFT_COLLAPSED_WIDTH_PX}px`,
-            minWidth: PANEL_LEFT_COLLAPSED_WIDTH_PX,
-            maxWidth: PANEL_LEFT_COLLAPSED_WIDTH_PX,
-          }
-          : {
-            flex: `1 1 ${100 - rightPct}%`,
-            minWidth: 0,
-            maxWidth: '70%',
-          }}
-      >
-        {leftPanel}
+      <div className={'modal-split__left' + (leftPanelCollapsedEffective ? ' is-collapsed' : '')}>
+        {leftPanelBody}
       </div>
       <div className={'modal-split__divider' + (leftPanelCollapsedEffective ? ' is-collapsed' : '')}>
         <LeftPanelCollapseToggle
@@ -886,31 +923,25 @@ function EventDetail({ event, onClose, onCreateCase, onAssign, onEventUpdate, cu
           disabled={!canCollapseLeftPanel}
           t={t}
         />
-        {!leftPanelCollapsedEffective && (
-          <div
-            className={'panel-resize-handle' + (handleActive ? ' is-active' : '')}
-            onMouseDown={startResize}
-            role="separator"
-            aria-orientation="vertical"
-            aria-label="Resize panels"
-            tabIndex={0}
-          >
-            <span className="panel-resize-handle__grip" aria-hidden="true">
-              <IconGripVertical size={10}/>
-            </span>
-          </div>
-        )}
+        <div
+          className={
+            'panel-resize-handle'
+            + (handleActive ? ' is-active' : '')
+            + (leftPanelCollapsedEffective ? ' is-collapsed-away' : '')
+          }
+          onMouseDown={leftPanelCollapsedEffective ? undefined : startResize}
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize panels"
+          aria-hidden={leftPanelCollapsedEffective}
+          tabIndex={leftPanelCollapsedEffective ? -1 : 0}
+        >
+          <span className="panel-resize-handle__grip" aria-hidden="true">
+            <IconGripVertical size={10}/>
+          </span>
+        </div>
       </div>
-      <div
-        className={'modal-split__right' + (leftPanelCollapsedEffective ? ' is-expanded' : '')}
-        style={leftPanelCollapsedEffective
-          ? { flex: '1 1 0', minWidth: 0, maxWidth: 'none' }
-          : {
-            flex: `1 1 ${rightPct}%`,
-            minWidth: 0,
-            maxWidth: '65%',
-          }}
-      >
+      <div className="modal-split__right">
         {rightPanel}
       </div>
     </div>
