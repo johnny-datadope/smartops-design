@@ -262,86 +262,119 @@ function LeftPanelCollapseToggle({ collapsed, onToggle, t, disabled = false }) {
   );
 }
 
-function CaseChromeStatusActions({ event, t, onCloseCase }) {
+function CaseChromeNoCaseLabel({ t }) {
+  return (
+    <div className="modal-chrome-case">
+      <span className="modal-chrome-no-case">{t.cases.noCaseOpened}</span>
+    </div>
+  );
+}
+
+function CaseChromeActionsMenu({ event, t, onCloseCase }) {
   const [actionsOpen, setActionsOpen] = React.useState(false);
   const isCaseClosed = event?.caseStatus === 'closed' || event?.case_status === 'CLOSED';
 
   return (
+    <div className="case-mgmt__actions-wrap">
+      <button
+        type="button"
+        className="case-actions-btn"
+        onClick={() => setActionsOpen(o => !o)}
+        aria-expanded={actionsOpen}
+      >
+        <IconChevronDown size={12}/> {t.cases.actions}
+      </button>
+      {actionsOpen && (
+        <>
+          <div onClick={() => setActionsOpen(false)} style={{ position:'fixed', inset:0, zIndex:1 }}/>
+          <div className="dropdown-menu" role="menu">
+            <button
+              type="button"
+              className="dropdown-menu__item"
+              role="menuitem"
+              disabled={isCaseClosed}
+              onClick={() => {
+                setActionsOpen(false);
+                if (!isCaseClosed) onCloseCase?.();
+              }}
+            >
+              <span className="dropdown-menu__item-icon" aria-hidden="true">
+                <IconCheckCircle2 size={14}/>
+              </span>
+              {t.cases.closeCase}
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function CaseChromeStatusActions({ event, t, onCloseCase }) {
+  return (
     <div className="modal-chrome-case">
       <CaseStatusBadge status={event.caseStatus} caseStatus={event.case_status}/>
-      <div className="case-mgmt__actions-wrap">
-        <button
-          type="button"
-          className="case-actions-btn"
-          onClick={() => setActionsOpen(o => !o)}
-          aria-expanded={actionsOpen}
-        >
-          <IconChevronDown size={12}/> {t.cases.actions}
-        </button>
-        {actionsOpen && (
-          <>
-            <div onClick={() => setActionsOpen(false)} style={{ position:'fixed', inset:0, zIndex:1 }}/>
-            <div className="dropdown-menu" role="menu">
-              <button
-                type="button"
-                className="dropdown-menu__item"
-                role="menuitem"
-                disabled={isCaseClosed}
-                onClick={() => {
-                  setActionsOpen(false);
-                  if (!isCaseClosed) onCloseCase?.();
-                }}
-              >
-                <span className="dropdown-menu__item-icon" aria-hidden="true">
-                  <IconCheckCircle2 size={14}/>
-                </span>
-                {t.cases.closeCase}
-              </button>
-            </div>
-          </>
-        )}
-      </div>
+      <CaseChromeActionsMenu event={event} t={t} onCloseCase={onCloseCase}/>
+    </div>
+  );
+}
+
+function ModalChromeActions({ isMaximized, onToggleMaximize, onClose }) {
+  const { t } = useI18n();
+  return (
+    <div className="modal-chrome-actions">
+      <button
+        type="button"
+        className="modal-chrome-actions__btn"
+        onClick={onToggleMaximize}
+        aria-label={isMaximized ? t.common.back : t.alertDetail.openFullPage}
+      >
+        {isMaximized ? <IconMinimize2 size={16}/> : <IconExternalLink size={16}/>}
+      </button>
+      <button
+        type="button"
+        className="modal-chrome-actions__btn"
+        onClick={onClose}
+        aria-label={t.common.close}
+      >
+        <IconClose size={16}/>
+      </button>
     </div>
   );
 }
 
 function ModalChromeBar({ isMaximized, onToggleMaximize, onClose, className = '', children }) {
-  const { t } = useI18n();
   return (
     <div className={'modal-chrome-bar' + (className ? ' ' + className : '')} role="toolbar">
       {children}
-      <div className="modal-chrome-actions">
-        <button
-          type="button"
-          className="modal-chrome-actions__btn"
-          onClick={onToggleMaximize}
-          aria-label={isMaximized ? t.common.back : t.alertDetail.openFullPage}
-        >
-          {isMaximized ? <IconMinimize2 size={16}/> : <IconExternalLink size={16}/>}
-        </button>
-        <button
-          type="button"
-          className="modal-chrome-actions__btn"
-          onClick={onClose}
-          aria-label={t.common.close}
-        >
-          <IconClose size={16}/>
-        </button>
-      </div>
+      <ModalChromeActions
+        isMaximized={isMaximized}
+        onToggleMaximize={onToggleMaximize}
+        onClose={onClose}
+      />
     </div>
   );
 }
 
-function AlertModalHeader({ event, severityKey, compact = false }) {
+function AlertModalHeader({ event, severityKey, compact = false, mobileTopActions }) {
   const namespace = event.namespace || event.scope || 'default';
 
+  const badges = (
+    <div className="modal-alert-header__badges">
+      <span className={modalSeverityBadgeClass(event.severity, event.sev)}>{severityKey}</span>
+      <ModalAlertStatusBadge alertStatus={event.alert_status} status={event.status}/>
+    </div>
+  );
+
   return (
-    <div className={'modal-alert-header' + (compact ? ' modal-alert-header--compact' : '')}>
+    <div className={'modal-alert-header' + (compact ? ' modal-alert-header--compact' : '') + (mobileTopActions ? ' modal-alert-header--mobile-toolbar' : '')}>
       <div className="modal-alert-header__main">
-        <div className="modal-alert-header__badges">
-          <span className={modalSeverityBadgeClass(event.severity, event.sev)}>{severityKey}</span>
-          <ModalAlertStatusBadge alertStatus={event.alert_status} status={event.status}/>
-        </div>
+        {mobileTopActions ? (
+          <div className="modal-alert-header__badges-row">
+            {badges}
+            <div className="modal-alert-header__toolbar">{mobileTopActions}</div>
+          </div>
+        ) : badges}
         <h1 className="modal-alert-header__title">{event.title}</h1>
         <p className="modal-alert-header__meta">
           {compact ? (
@@ -393,6 +426,7 @@ function EventDetail({ event, onClose, onCreateCase, onAssign, onEventUpdate, cu
   const [leftPanelCollapsed, setLeftPanelCollapsed] = React.useState(false);
   const [panelCollapseAnimating, setPanelCollapseAnimating] = React.useState(false);
   const panelCollapseAnimTimerRef = React.useRef(null);
+  const prevInvestigationStartedRef = React.useRef(false);
   const streamStartedRef = React.useRef(null);
   const [stageRev, setStageRev] = React.useState(0);
 
@@ -475,6 +509,46 @@ function EventDetail({ event, onClose, onCreateCase, onAssign, onEventUpdate, cu
 
   const investigationStarted = !!event?.investigation_started;
   const streamComplete = !!event?._streamComplete;
+
+  const beginPanelCollapseAnimation = React.useCallback(() => {
+    setPanelCollapseAnimating(true);
+    if (panelCollapseAnimTimerRef.current != null) {
+      window.clearTimeout(panelCollapseAnimTimerRef.current);
+    }
+    panelCollapseAnimTimerRef.current = window.setTimeout(() => {
+      setPanelCollapseAnimating(false);
+      panelCollapseAnimTimerRef.current = null;
+    }, 240);
+  }, []);
+
+  const collapseLeftPanelWithAnimation = React.useCallback(() => {
+    if (isMobile) {
+      setMobileView('chat');
+      return;
+    }
+    beginPanelCollapseAnimation();
+    setLeftPanelCollapsed(true);
+  }, [isMobile, beginPanelCollapseAnimation]);
+
+  React.useEffect(() => {
+    prevInvestigationStartedRef.current = false;
+    if (!event) return;
+    if (!event.investigation_started) {
+      setLeftPanelCollapsed(false);
+      if (isMobile) setMobileView('detail');
+    }
+  }, [event?.id, isMobile]);
+
+  React.useEffect(() => {
+    if (!event) return;
+
+    const justStarted = investigationStarted && !prevInvestigationStartedRef.current;
+    prevInvestigationStartedRef.current = investigationStarted;
+
+    if (!justStarted || streamComplete) return;
+
+    collapseLeftPanelWithAnimation();
+  }, [event, investigationStarted, streamComplete, collapseLeftPanelWithAnimation]);
 
   React.useEffect(() => {
     if (!event) return;
@@ -650,21 +724,40 @@ function EventDetail({ event, onClose, onCreateCase, onAssign, onEventUpdate, cu
 
   const toggleLeftPanelCollapsed = () => {
     if (!canCollapseLeftPanel) return;
-    setPanelCollapseAnimating(true);
-    if (panelCollapseAnimTimerRef.current != null) {
-      window.clearTimeout(panelCollapseAnimTimerRef.current);
-    }
-    panelCollapseAnimTimerRef.current = window.setTimeout(() => {
-      setPanelCollapseAnimating(false);
-      panelCollapseAnimTimerRef.current = null;
-    }, 240);
+    beginPanelCollapseAnimation();
     setLeftPanelCollapsed(cur => !cur);
   };
+
+  const modalChromeActions = (
+    <ModalChromeActions
+      isMaximized={isMaximized}
+      onToggleMaximize={() => setIsMaximized(m => !m)}
+      onClose={onClose}
+    />
+  );
+
+  const modalChrome = (
+    <ModalChromeBar
+      isMaximized={isMaximized}
+      onToggleMaximize={() => setIsMaximized(m => !m)}
+      onClose={onClose}
+    >
+      {hasCase ? (
+        <CaseChromeStatusActions event={event} t={t} onCloseCase={handleCloseCase}/>
+      ) : (
+        <CaseChromeNoCaseLabel t={t}/>
+      )}
+    </ModalChromeBar>
+  );
 
   const leftPanelExpanded = (
     <div className="modal-split__panel">
       <div className="modal-left-fixed">
-        <AlertModalHeader event={event} severityKey={severityKey}/>
+        <AlertModalHeader
+          event={event}
+          severityKey={severityKey}
+          mobileTopActions={isMobile ? modalChromeActions : undefined}
+        />
 
         {investigationStages && (
           <InvestigationStagesTimeline stages={investigationStages} t={t}/>
@@ -749,6 +842,8 @@ function EventDetail({ event, onClose, onCreateCase, onAssign, onEventUpdate, cu
           assignOpen={assignOpen}
           setAssignOpen={setAssignOpen}
           onAssign={onAssign}
+          onCloseCase={handleCloseCase}
+          mobileChromeActions={isMobile ? modalChromeActions : undefined}
         />
       </div>
 
@@ -860,18 +955,6 @@ function EventDetail({ event, onClose, onCreateCase, onAssign, onEventUpdate, cu
     </div>
   );
 
-  const modalChrome = (
-    <ModalChromeBar
-      isMaximized={isMaximized}
-      onToggleMaximize={() => setIsMaximized(m => !m)}
-      onClose={onClose}
-    >
-      {hasCase ? (
-        <CaseChromeStatusActions event={event} t={t} onCloseCase={handleCloseCase}/>
-      ) : null}
-    </ModalChromeBar>
-  );
-
   const shell = isMobile ? (
     <div
       className={'modal-dialog' + (isMaximized ? ' is-maximized' : '')}
@@ -884,9 +967,6 @@ function EventDetail({ event, onClose, onCreateCase, onAssign, onEventUpdate, cu
         <button type="button" className={'modal-mobile-tab' + (mobileView === 'chat' ? ' is-active' : '')} onClick={() => setMobileView('chat')}>
           <IconBrainCircuit size={14}/> {t.chat.aiChatTab}
         </button>
-        <div className="modal-mobile-bar__chrome">
-          {modalChrome}
-        </div>
       </div>
       <div className="modal-mobile-body">
         {mobileView === 'detail' ? leftPanelExpanded : (
@@ -978,10 +1058,11 @@ const codeInline = {
   color:'var(--accent)',
 };
 
-function CaseManagementHeader({ event, hasCase, t, assignOpen, setAssignOpen, onAssign }) {
+function CaseManagementHeader({ event, hasCase, t, assignOpen, setAssignOpen, onAssign, onCloseCase, mobileChromeActions }) {
   const list = currentAssignees(event);
   const caseNum = caseNumberFromEvent(event);
   const cannotUnassignLast = hasCase && list.length <= 1;
+  const isMobileLayout = !!mobileChromeActions;
 
   const unassignOne = (initials) => {
     if (cannotUnassignLast) return;
@@ -989,9 +1070,34 @@ function CaseManagementHeader({ event, hasCase, t, assignOpen, setAssignOpen, on
     if (u && onAssign) onAssign({ toggle: u });
   };
 
+  const assignToButton = onAssign ? (
+    <div className="case-mgmt__assign-wrap" style={{ position:'relative' }}>
+      <button
+        type="button"
+        className="assign-to-btn"
+        onClick={() => setAssignOpen(o => !o)}
+        aria-expanded={assignOpen}
+      >
+        <IconPlus size={12}/> {t.alerts.assignTo}
+      </button>
+      {assignOpen && (
+        <>
+          <div onClick={() => setAssignOpen(false)} style={{ position:'fixed', inset:0, zIndex:1 }}/>
+          <div className="case-assign-popover">
+            <AssigneePickerBody
+              assigned={list}
+              hasCase={hasCase}
+              onToggle={u => onAssign({ toggle: u })}
+            />
+          </div>
+        </>
+      )}
+    </div>
+  ) : null;
+
   return (
     <div className="case-mgmt">
-      <div className="case-mgmt__top">
+      <div className={'case-mgmt__top' + (isMobileLayout ? ' case-mgmt__top--mobile' : '')}>
         <div className="case-mgmt__title">
           <div className="case-mgmt__title-icon" aria-hidden="true">
             <IconBriefcase size={14}/>
@@ -1000,12 +1106,19 @@ function CaseManagementHeader({ event, hasCase, t, assignOpen, setAssignOpen, on
             {hasCase && caseNum != null ? `${t.cases.title} #${caseNum}` : t.cases.title}
           </span>
         </div>
-        {!hasCase && (
-          <span className="case-mgmt__unassigned">{t.cases.noCaseOpened}</span>
-        )}
+        {isMobileLayout ? (
+          <div className="case-mgmt__top-aside">
+            {hasCase ? (
+              <CaseStatusBadge status={event.caseStatus} caseStatus={event.case_status}/>
+            ) : (
+              <span className="case-mgmt__unassigned">{t.cases.noCaseOpened}</span>
+            )}
+            {mobileChromeActions}
+          </div>
+        ) : null}
       </div>
 
-      <div className="case-mgmt__assignees">
+      <div className={'case-mgmt__assignees' + (isMobileLayout ? ' case-mgmt__assignees--mobile' : '')}>
         <span className="case-mgmt__users-icon" aria-hidden="true">
           <IconUsers size={12}/>
         </span>
@@ -1035,30 +1148,14 @@ function CaseManagementHeader({ event, hasCase, t, assignOpen, setAssignOpen, on
             <span className="case-mgmt__unassigned">{t.cases.noOneAssigned}</span>
           )}
         </div>
-        {onAssign && (
-          <div style={{ position:'relative' }}>
-            <button
-              type="button"
-              className="assign-to-btn"
-              onClick={() => setAssignOpen(o => !o)}
-              aria-expanded={assignOpen}
-            >
-              <IconPlus size={12}/> {t.alerts.assignTo}
-            </button>
-            {assignOpen && (
-              <>
-                <div onClick={() => setAssignOpen(false)} style={{ position:'fixed', inset:0, zIndex:1 }}/>
-                <div className="case-assign-popover">
-                  <AssigneePickerBody
-                    assigned={list}
-                    hasCase={hasCase}
-                    onToggle={u => onAssign({ toggle: u })}
-                  />
-                </div>
-              </>
-            )}
+        {isMobileLayout ? (
+          <div className="case-mgmt__assignee-actions">
+            {hasCase ? (
+              <CaseChromeActionsMenu event={event} t={t} onCloseCase={onCloseCase}/>
+            ) : null}
+            {assignToButton}
           </div>
-        )}
+        ) : assignToButton}
       </div>
     </div>
   );
