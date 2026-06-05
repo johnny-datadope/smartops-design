@@ -911,6 +911,32 @@
     color: var(--muted-foreground);
   }
   .modal-alert-header__meta-sep { margin: 0 0.25rem; opacity: 0.4; }
+  .modal-alert-header--mobile-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+  }
+  .modal-alert-header--mobile-toolbar .modal-alert-header__main {
+    width: 100%;
+  }
+  .modal-alert-header__badges-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+  }
+  .modal-alert-header__badges-row .modal-alert-header__badges {
+    margin-bottom: 0;
+    flex: 1;
+    min-width: 0;
+  }
+  .modal-alert-header__badges-row .modal-alert-header__toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-shrink: 0;
+  }
   /* Modal chrome — case status + actions, then maximize + close (SO-2173 AC4) */
   .modal-chrome-bar {
     display: flex;
@@ -919,6 +945,11 @@
     flex-shrink: 0;
     z-index: 30;
     pointer-events: auto;
+  }
+  .case-mgmt__top-aside .modal-chrome-actions__btn,
+  .modal-alert-header__toolbar .modal-chrome-actions__btn {
+    width: 1.75rem;
+    height: 1.75rem;
   }
   .modal-dialog--split > .modal-chrome-bar {
     position: absolute;
@@ -930,6 +961,13 @@
     align-items: center;
     gap: 0.5rem;
     flex-wrap: nowrap;
+  }
+  .modal-chrome-no-case {
+    font-size: 11px;
+    line-height: 1.25;
+    color: var(--muted-foreground);
+    white-space: nowrap;
+    flex-shrink: 0;
   }
   .modal-chrome-actions {
     display: flex;
@@ -1865,27 +1903,16 @@
   .modal-mobile-bar {
     display: flex; flex-shrink: 0; border-bottom: 1px solid var(--border);
     background: color-mix(in oklch, var(--card) 50%, transparent);
+    width: 100%;
   }
   .modal-mobile-tab {
-    flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px;
+    flex: 1 1 50%; display: flex; align-items: center; justify-content: center; gap: 8px;
+    min-width: 0;
     padding: 10px 12px; font-size: 12px; font-weight: 500;
     color: var(--muted-foreground); background: transparent; border: 0;
     border-bottom: 2px solid transparent; margin-bottom: -1px; cursor: pointer;
   }
   .modal-mobile-tab.is-active { color: var(--primary); border-bottom-color: var(--primary); }
-  .modal-mobile-bar__chrome {
-    display: flex;
-    align-items: center;
-    flex-shrink: 0;
-    margin-left: auto;
-    padding: 0.25rem 0.375rem;
-  }
-  .modal-mobile-bar__chrome .modal-chrome-bar {
-    gap: 0.375rem;
-  }
-  .modal-mobile-bar__chrome .modal-chrome-case {
-    gap: 0.375rem;
-  }
   .modal-mobile-body { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
   .modal-mobile-body .chat-panel { margin: 0; flex: 1; min-height: 0; }
   @media (min-width: 768px) {
@@ -3041,6 +3068,31 @@
     align-items: flex-start;
     justify-content: space-between;
     gap: 12px;
+  }
+  .case-mgmt__top--mobile {
+    align-items: center;
+  }
+  .case-mgmt__top-aside {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.375rem;
+    flex-shrink: 0;
+  }
+  .case-mgmt__assignees--mobile {
+    flex-wrap: nowrap;
+    align-items: center;
+  }
+  .case-mgmt__assignees--mobile .case-mgmt__assignee-list {
+    flex: 1;
+    min-width: 0;
+  }
+  .case-mgmt__assignee-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-shrink: 0;
+    margin-left: auto;
   }
   .case-mgmt__title { display: flex; align-items: center; gap: 8px; min-width: 0; }
   .case-mgmt__actions-wrap { position: relative; flex-shrink: 0; }
