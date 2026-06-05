@@ -49,9 +49,9 @@ function AlertMobileCard({
             <p className="alert-mobile-card__title">
               {event.title || event.alert_name || t.alerts.unnamedAlert}
             </p>
-            {(event.detail || event.alert_description) && (
+            {(alertSummaryText(event) || event.alert_description) && (
               <p className="alert-mobile-card__desc">
-                {event.detail || event.alert_description}
+                {alertSummaryText(event) || event.alert_description}
               </p>
             )}
           </div>

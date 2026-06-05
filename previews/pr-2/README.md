@@ -15,7 +15,7 @@ Published at https://johnny-datadope.github.io/smartops-design/
 - Each PR gets a public preview at `previews/pr-<number>/` via [`deploy-preview.yml`](.github/workflows/deploy-preview.yml); the workflow comments the URL on the PR (open mock at `…/previews/pr-<N>/#/events`).
 - When a PR closes, [`cleanup-preview.yml`](.github/workflows/cleanup-preview.yml) removes `previews/pr-<number>/` from `gh-pages`.
 
-**GitHub repo settings (one-time):** Pages → source **GitHub Actions**; Actions → workflow permissions **Read and write**.
+**GitHub repo settings (one-time):** Pages → **Deploy from branch** → `gh-pages` / `(root)`; Actions → workflow permissions **Read and write**. See [`.github/GITHUB_SETUP.md`](.github/GITHUB_SETUP.md) (do not use **GitHub Actions** as the Pages source — previews live only on `gh-pages`).
 
 ## Run locally
 
