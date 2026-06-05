@@ -107,8 +107,9 @@ function InvestigationStageSummaryDuration({ stages }) {
   return <p className="modal-left-rail-duration">{text}</p>;
 }
 
-function InvestigationStageDetails({ stageKey, stageData, isCompleted, isActive, nowIso, t }) {
+function InvestigationStageDetails({ stageKey, stageData, isCompleted, isActive, nowIso, currentStage, t }) {
   if (stageKey === 'closed' && !stageData?.finished_at) return null;
+  if (stageKey === 'post_mortem' && currentStage === 'closed' && !stageData?.started_at) return null;
   if (!stageData?.started_at) {
     return <span className="investigation-stages__dash">—</span>;
   }
@@ -161,6 +162,7 @@ function InvestigationStagesTimeline({ stages, t, railOnly = false }) {
               isCompleted={isCompleted}
               isActive={isActive}
               nowIso={nowIso}
+              currentStage={stages.current_stage}
               t={t}
             />
           </div>
@@ -193,6 +195,7 @@ function InvestigationStagesTimeline({ stages, t, railOnly = false }) {
               isCompleted={isCompleted}
               isActive={isActive}
               nowIso={nowIso}
+              currentStage={stages.current_stage}
               t={t}
             />
           </div>
@@ -212,6 +215,7 @@ function InvestigationStagesTimeline({ stages, t, railOnly = false }) {
               isCompleted={isCompleted}
               isActive={isActive}
               nowIso={nowIso}
+              currentStage={stages.current_stage}
               t={t}
             />
           </div>
@@ -597,6 +601,7 @@ function EventDetail({ event, onClose, onCreateCase, onAssign, onEventUpdate, cu
 
   const rcaHasBeenGenerated = turns.some(t => t.kind === 'analysis');
   const postMortemGenerated = turns.some(t => t.kind === 'postmortem');
+  const isCaseClosed = event?.caseStatus === 'closed' || event?.case_status === 'CLOSED';
   const canReinvestigate = turns.some(t => t.kind === 'user');
 
   const handleFeedback = (type) => {
@@ -618,7 +623,7 @@ function EventDetail({ event, onClose, onCreateCase, onAssign, onEventUpdate, cu
   };
 
   const runPostmortem = () => {
-    if (busy || postMortemGenerated) return;
+    if (busy || postMortemGenerated || isCaseClosed) return;
     setBusy(true);
     if (typeof startPostMortemStage === 'function') {
       event.investigation_stages = startPostMortemStage(
@@ -941,7 +946,7 @@ function EventDetail({ event, onClose, onCreateCase, onAssign, onEventUpdate, cu
                 </button>
               ) : null}
               {!postMortemGenerated && (
-              <button type="button" onClick={runPostmortem} disabled={busy || !rcaHasBeenGenerated} className="chat-footer-btn">
+              <button type="button" onClick={runPostmortem} disabled={busy || !rcaHasBeenGenerated || isCaseClosed} className="chat-footer-btn">
                 <IconFileText size={14}/> {t.chat.postMortem}
               </button>
               )}

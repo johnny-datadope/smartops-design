@@ -154,13 +154,7 @@ function closeCaseInvestigationStages(stages) {
   if (!s.triage.finished_at) {
     s = completeTriageStage(s);
   }
-  const triageEndMs = new Date(s.triage.finished_at).getTime();
-  let post = s.post_mortem;
-  if (!post?.finished_at) {
-    const postStart = triageEndMs + 1000;
-    const postEnd = postStart + 60000;
-    post = { started_at: iso(postStart), finished_at: iso(postEnd) };
-  }
+  let post = s.post_mortem?.started_at ? s.post_mortem : null;
   const closedStart = s.closed?.started_at || s.triage?.started_at || iso(now);
   return {
     current_stage: 'closed',
@@ -225,12 +219,11 @@ function shouldShowInvestigationStages(event) {
 
 function mockCloseCase(event) {
   if (!event) return event;
+  const stages = event.investigation_stages || seedInvestigationStages(event);
   event.case_status = 'CLOSED';
   event.caseStatus = 'closed';
   event.agent_status = 'COMPLETED';
-  event.investigation_stages = closeCaseInvestigationStages(
-    event.investigation_stages || seedInvestigationStages(event),
-  );
+  event.investigation_stages = closeCaseInvestigationStages(stages);
   return event;
 }
 
