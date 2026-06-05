@@ -383,7 +383,7 @@ function EventsTable({ events, onOpenDetail, onAnalyzeClick, onArchive, showArch
                   <td style={{ ...td, minWidth: 280 }}>
                     <button type="button" className="event-cell-link" onClick={() => onOpenDetail && onOpenDetail(i)}>
                       <div className="event-cell-title">{e.title}</div>
-                      <div className="event-cell-desc">{e.detail}</div>
+                      <div className="event-cell-desc">{alertSummaryText(e) || e.detail}</div>
                     </button>
                   </td>
                   <td style={{ ...td, color: 'var(--fg-2)' }} className="mono">{e.service}</td>
@@ -681,7 +681,7 @@ function EventsPage({ onOpenDetail, onAnalyzeClick, creatingCaseIndex, currentUs
     if (filter === 'open' && e.status !== 'open') return false;
     if (filter === 'cases' && (e.case === '—' || e.caseStatus === 'closed')) return false;
     if (filter === 'resolved' && e.caseStatus !== 'closed' && e.status !== 'closed') return false;
-    if (query && !(e.title + e.detail + e.service + e.source).toLowerCase().includes(query.toLowerCase())) return false;
+    if (query && !(e.title + alertSummaryText(e) + alertDetailsText(e) + e.service + e.source).toLowerCase().includes(query.toLowerCase())) return false;
 
     if (advFilters.statuses.length && !advFilters.statuses.includes(e.status)) return false;
     if (advFilters.caseStatuses.length && !advFilters.caseStatuses.includes(e.caseStatus)) return false;
